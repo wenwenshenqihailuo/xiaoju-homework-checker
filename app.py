@@ -3,7 +3,7 @@ import os
 from flask import Flask, request, jsonify, render_template
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-from image_recognizer import BaiduOCRRecognizer
+from image_recognizer import AIVisionRecognizer
 from answer_checker import AnswerChecker
 
 load_dotenv()
@@ -42,10 +42,7 @@ def check_homework():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        recognizer = BaiduOCRRecognizer(
-            os.getenv("BAIDU_OCR_API_KEY"),
-            os.getenv("BAIDU_OCR_SECRET_KEY")
-        )
+        recognizer = AIVisionRecognizer(os.getenv("DEEPSEEK_API_KEY"))
         recognized_text = recognizer.recognize(filepath)
 
         checker = AnswerChecker(os.getenv("DEEPSEEK_API_KEY"))

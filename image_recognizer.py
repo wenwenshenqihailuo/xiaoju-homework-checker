@@ -45,11 +45,28 @@ class BaiduOCRRecognizer(ImageRecognizer):
 
 
 class AIVisionRecognizer(ImageRecognizer):
-    """AI视觉识别（预留接口）"""
+    """DeepSeek视觉识别"""
 
     def __init__(self, api_key: str):
-        self.api_key = api_key
+        from openai import OpenAI
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com"
+        )
 
     def recognize(self, image_path: str) -> str:
-        # TODO: 实现AI视觉识别
-        raise NotImplementedError("AI视觉识别功能待实现")
+        with open(image_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode()
+
+        response = self.client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "这是一张英文听写作业图片，请识别图片中的所有文字内容，包括英文单词/短语和对应的中文翻译。请按原格式输出，保持英文和中文的对应关系。"},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                ]
+            }],
+            max_tokens=1024
+        )
+        return response.choices[0].message.content
