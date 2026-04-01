@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>错题本 - 小橘</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        h1 { color: #667eea; text-align: center; margin-bottom: 10px; font-size: 32px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+        .nav { text-align: center; margin-bottom: 20px; }
+        .nav a { color: #667eea; text-decoration: none; margin: 0 10px; }
+        .wrong-item {
+            background: #fff5f5;
+            border: 2px solid #f44336;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .item-info { flex: 1; }
+        .item-info strong { font-size: 18px; color: #333; }
+        .item-info .error { color: #f44336; font-size: 14px; margin-top: 5px; }
+        .btn-master {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .empty { text-align: center; color: #999; padding: 40px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 错题本</h1>
+        <p class="subtitle">记录你的错题，巩固学习</p>
+        <div class="nav">
+            <a href="/">← 返回批改</a>
+        </div>
+        <div id="wrongList"></div>
+    </div>
+    <script>
+        async function loadWrongAnswers() {
+            const response = await fetch('/api/wrong-answers');
+            const data = await response.json();
+            const list = document.getElementById('wrongList');
+
+            if (data.items.length === 0) {
+                list.innerHTML = '<div class="empty">暂无错题记录</div>';
+                return;
+            }
+
+            list.innerHTML = data.items.map(item => `
+                <div class="wrong-item">
+                    <div class="item-info">
+                        <div><strong>${item.english}</strong> - ${item.chinese}</div>
+                        <div class="error">${item.error_detail || ''}</div>
+                    </div>
+                    <button class="btn-master" onclick="markMastered(${item.id})">已掌握</button>
+                </div>
+            `).join('');
+        }
+
+        async function markMastered(id) {
+            await fetch(\`/api/wrong-answers/\${id}/master\`, { method: 'POST' });
+            loadWrongAnswers();
+        }
+
+        loadWrongAnswers();
+    </script>
+</body>
+</html>

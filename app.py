@@ -3,8 +3,9 @@ import os
 from flask import Flask, request, jsonify, render_template
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-from image_recognizer import AIVisionRecognizer
+from image_recognizer import BaiduOCRRecognizer
 from answer_checker import AnswerChecker
+from database import WrongAnswerDB
 
 load_dotenv()
 
@@ -25,6 +26,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/wrong-answers')
+def wrong_answers_page():
+    return render_template('wrong_answers.html')
+
+
 @app.route('/api/check', methods=['POST'])
 def check_homework():
     if 'file' not in request.files:
@@ -42,7 +48,12 @@ def check_homework():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        recognizer = AIVisionRecognizer(os.getenv("DEEPSEEK_API_KEY"))
+        ocr_mode = request.form.get('mode', 'handwriting')
+        recognizer = BaiduOCRRecognizer(
+            os.getenv("BAIDU_OCR_API_KEY"),
+            os.getenv("BAIDU_OCR_SECRET_KEY"),
+            mode=ocr_mode
+        )
         recognized_text = recognizer.recognize(filepath)
 
         checker = AnswerChecker(os.getenv("DEEPSEEK_API_KEY"))
@@ -55,6 +66,55 @@ def check_homework():
             'result': result['result']
         })
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/confirm-result', methods=['POST'])
+def confirm_result():
+    """用户确认结果后保存错题"""
+    try:
+        data = request.json
+        db = WrongAnswerDB()
+        for item in data.get('items', []):
+            if item.get('status') == 'wrong':
+                db.add_wrong_answer(
+                    item.get('english', ''),
+                    item.get('chinese', ''),
+                    item.get('error', '')
+                )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/wrong-answers', methods=['GET'])
+def get_wrong_answers():
+    """获取错题列表"""
+    try:
+        db = WrongAnswerDB()
+        rows = db.get_all_wrong_answers()
+        items = []
+        for row in rows:
+            items.append({
+                'id': row[0],
+                'english': row[1],
+                'chinese': row[2],
+                'error_detail': row[3],
+                'created_at': row[4]
+            })
+        return jsonify({'items': items})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/wrong-answers/<int:answer_id>/master', methods=['POST'])
+def mark_mastered(answer_id):
+    """标记为已掌握"""
+    try:
+        db = WrongAnswerDB()
+        db.mark_as_mastered(answer_id)
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

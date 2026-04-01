@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小橘 - 英文作业批改助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 900px;
+            width: 100%;
+            padding: 40px;
+        }
+        h1 { color: #667eea; text-align: center; margin-bottom: 10px; font-size: 32px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; }
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover { background: #f8f9ff; border-color: #764ba2; }
+        .upload-icon { font-size: 48px; margin-bottom: 15px; }
+        input[type="file"] { display: none; }
+        .mode-selector { margin-bottom: 20px; }
+        .mode-selector label { display: block; margin-bottom: 8px; color: #666; font-weight: 500; }
+        .mode-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        .mode-selector select:focus { outline: none; border-color: #667eea; }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .progress-container { display: none; margin-top: 20px; }
+        .progress-bar { width: 100%; height: 8px; background: #e0e0e0; border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); width: 0%; transition: width 0.3s; }
+        .progress-text { text-align: center; margin-top: 10px; color: #666; }
+        .summary { display: none; margin-top: 30px; text-align: center; }
+        .summary-cards { display: flex; gap: 15px; justify-content: center; margin-top: 15px; }
+        .summary-card { background: #f8f9ff; padding: 20px; border-radius: 10px; flex: 1; max-width: 150px; }
+        .summary-card.correct { background: #e8f5e9; }
+        .summary-card.wrong { background: #ffebee; }
+        .summary-number { font-size: 32px; font-weight: bold; color: #667eea; }
+        .summary-card.correct .summary-number { color: #4caf50; }
+        .summary-card.wrong .summary-number { color: #f44336; }
+        .result-items { display: none; margin-top: 20px; }
+        .result-item {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .result-item.correct { border-color: #4caf50; background: #f1f8f4; }
+        .result-item.wrong { border-color: #f44336; background: #fef5f5; }
+        .status-icon { font-size: 24px; }
+        .item-content { flex: 1; }
+        .error { background: #ffebee; color: #d32f2f; padding: 15px; border-radius: 10px; margin-top: 20px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍊 小橘</h1>
+        <p class="subtitle">英文作业智能批改助手</p>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="/wrong-answers" style="color: #667eea; text-decoration: none;">📚 查看错题本</a>
+        </div>
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📸</div>
+            <p>点击或拖拽上传作业图片</p>
+            <p style="color: #999; font-size: 14px; margin-top: 10px;">支持 JPG、PNG 格式</p>
+        </div>
+        <input type="file" id="fileInput" accept="image/*">
+        <div class="mode-selector">
+            <label>识别模式</label>
+            <select id="ocrMode">
+                <option value="handwriting">手写文字识别（推荐）</option>
+                <option value="accurate">高精度识别</option>
+                <option value="general">通用识别</option>
+                <option value="webimage">网络图片识别</option>
+            </select>
+        </div>
+        <button class="btn" id="submitBtn" disabled>开始批改</button>
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <p class="progress-text" id="progressText">正在处理...</p>
+        </div>
+        <div class="error" id="error"></div>
+        <div class="summary" id="summary">
+            <h2>📊 批改结果</h2>
+            <div class="summary-cards">
+                <div class="summary-card"><div class="summary-number" id="totalCount">0</div><div>总题数</div></div>
+                <div class="summary-card correct"><div class="summary-number" id="correctCount">0</div><div>正确</div></div>
+                <div class="summary-card wrong"><div class="summary-number" id="wrongCount">0</div><div>错误</div></div>
+            </div>
+        </div>
+        <div class="result-items" id="resultItems"></div>
+    </div>
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        let selectedFile = null;
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                uploadArea.innerHTML = `<div class="upload-icon">✅</div><p>已选择: ${selectedFile.name}</p>`;
+                submitBtn.disabled = false;
+            }
+        });
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = '#764ba2'; });
+        uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = '#667eea'; });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#667eea';
+            selectedFile = e.dataTransfer.files[0];
+            if (selectedFile) {
+                uploadArea.innerHTML = `<div class="upload-icon">✅</div><p>已选择: ${selectedFile.name}</p>`;
+                submitBtn.disabled = false;
+            }
+        });
+
+
+
+
+
+        function updateProgress(percent, text) {
+            progressFill.style.width = percent + '%';
+            progressText.textContent = text;
+        }
+
+        submitBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            submitBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('summary').style.display = 'none';
+            document.getElementById('resultItems').style.display = 'none';
+
+            updateProgress(10, '正在上传图片...');
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('mode', document.getElementById('ocrMode').value);
+
+            setTimeout(() => updateProgress(30, '正在识别文字...'), 500);
+            setTimeout(() => updateProgress(60, '正在智能批改...'), 1500);
+            setTimeout(() => updateProgress(90, '正在生成结果...'), 2500);
+
+            try {
+                const response = await fetch('/api/check', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                updateProgress(100, '完成！');
+                if (response.ok) {
+                    const result = data.result;
+                    document.getElementById('totalCount').textContent = result.summary.total;
+                    document.getElementById('correctCount').textContent = result.summary.correct;
+                    document.getElementById('wrongCount').textContent = result.summary.wrong;
+                    document.getElementById('summary').style.display = 'block';
+
+                    const resultItems = document.getElementById('resultItems');
+                    resultItems.innerHTML = '';
+                    result.items.forEach(item => {
+                        const statusClass = item.status === 'correct' ? 'correct' : (item.status === 'wrong' ? 'wrong' : '');
+                        const icon = item.status === 'correct' ? '✅' : (item.status === 'wrong' ? '❌' : '❓');
+                        const errorText = item.error ? `<div style="color: #f44336; font-size: 14px; margin-top: 5px;">${item.error}</div>` : '';
+                        resultItems.innerHTML += `
+                            <div class="result-item ${statusClass}">
+                                <div class="status-icon">${icon}</div>
+                                <div class="item-content">
+                                    <div><strong>${item.english}</strong> - ${item.chinese}</div>
+                                    ${errorText}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    resultItems.style.display = 'block';
+                } else {
+                    document.getElementById('error').textContent = '错误: ' + data.error;
+                    document.getElementById('error').style.display = 'block';
+                }
+            } catch (err) {
+                document.getElementById('error').textContent = '网络错误: ' + err.message;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                progressContainer.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -14,11 +14,19 @@ class ImageRecognizer(ABC):
 
 
 class BaiduOCRRecognizer(ImageRecognizer):
-    """百度OCR识别"""
+    """百度OCR识别 - 支持多种识别模式"""
 
-    def __init__(self, api_key: str, secret_key: str):
+    OCR_MODES = {
+        "general": "general_basic",  # 通用文字识别（标准版）
+        "accurate": "accurate_basic",  # 通用文字识别（高精度版）
+        "handwriting": "handwriting",  # 手写文字识别
+        "webimage": "webimage",  # 网络图片文字识别
+    }
+
+    def __init__(self, api_key: str, secret_key: str, mode: str = "handwriting"):
         self.api_key = api_key
         self.secret_key = secret_key
+        self.mode = mode
         self.access_token = self._get_access_token()
 
     def _get_access_token(self) -> str:
@@ -35,7 +43,8 @@ class BaiduOCRRecognizer(ImageRecognizer):
         with open(image_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode()
 
-        url = f"https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic?access_token={self.access_token}"
+        ocr_type = self.OCR_MODES.get(self.mode, "handwriting")
+        url = f"https://aip.baidubce.com/rest/2.0/ocr/v1/{ocr_type}?access_token={self.access_token}"
         response = requests.post(url, data={"image": image_data})
         result = response.json()
 
@@ -58,15 +67,20 @@ class AIVisionRecognizer(ImageRecognizer):
         with open(image_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode()
 
+        prompt = f"""请识别这张英文听写作业图片中的所有内容。
+
+图片（base64编码）：
+{image_data[:100]}...
+
+请提取图片中的：
+1. 英文单词/短语
+2. 对应的中文翻译
+
+按原格式输出，保持英文和中文的对应关系。"""
+
         response = self.client.chat.completions.create(
             model="deepseek-chat",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "这是一张英文听写作业图片，请识别图片中的所有文字内容，包括英文单词/短语和对应的中文翻译。请按原格式输出，保持英文和中文的对应关系。"},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
-                ]
-            }],
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=1024
         )
         return response.choices[0].message.content
