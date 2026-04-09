@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "上传检查",
+  "navigationBarBackgroundColor": "#0052D9",
+  "navigationBarTextStyle": "white",
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-progress": "tdesign-miniprogram/progress/progress"
+  }
+}

@@ -1,0 +1,87 @@
+<view class="history-container">
+  <!-- 顶部导航 -->
+  <view class="header-section">
+    <view class="header-content">
+      <text class="page-title">历史记录</text>
+      <view class="search-btn" bind:tap="showSearch">
+        <text class="search-icon">🔍</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 筛选标签 -->
+  <view class="filter-section">
+    <view class="filter-tabs">
+      <view 
+        class="filter-tab active"
+      >
+        全部
+      </view>
+    </view>
+  </view>
+
+  <!-- 历史记录列表 -->
+  <view class="main-content">
+    <view class="history-list" wx:if="{{filteredRecords.length > 0}}">
+      <view 
+        class="history-item" 
+        wx:for="{{filteredRecords}}" 
+        wx:key="id"
+        bind:tap="viewRecordDetail"
+        data-record="{{item}}"
+      >
+        <view class="record-header">
+          <view class="record-info">
+            <view class="record-icon score-{{item.scoreLevel}}">
+              <text class="icon">📝</text>
+            </view>
+            <view class="record-details">
+              <text class="record-title">{{item.title}}</text>
+              <text class="record-time">{{item.time}}</text>
+            </view>
+          </view>
+          <view class="record-score-section score-{{item.scoreLevel}}">
+            <text>{{item.questionCount}}题 准确率 {{item.score}}%</text>
+          </view>
+        </view>
+        
+        <view class="record-summary">
+          <text class="summary-text">{{item.summary}}</text>
+        </view>
+        
+        <view class="record-footer">
+          <button class="delete-btn" catch:tap="onDelete" data-id="{{item.id}}">删除</button>
+          <text class="view-detail" catch:tap="viewRecordDetail" data-record="{{item}}">查看详情</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{filteredRecords.length === 0}}">
+      <view class="empty-icon">📚</view>
+      <text class="empty-title">暂无记录</text>
+      <text class="empty-desc">开始你的第一次英语检查吧！</text>
+      <t-button 
+        theme="primary" 
+        size="medium" 
+        class="start-check-btn"
+        bind:tap="startCheck"
+      >
+        开始检查
+      </t-button>
+    </view>
+
+    <!-- 加载更多 -->
+    <view class="load-more" wx:if="{{hasMore && filteredRecords.length > 0}}">
+      <t-button 
+        theme="default" 
+        size="medium" 
+        class="load-more-btn"
+        bind:tap="loadMore"
+        loading="{{loading}}"
+      >
+        {{loading ? '加载中...' : '加载更多记录'}}
+      </t-button>
+    </view>
+  </view>
+</view>

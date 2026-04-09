@@ -1,0 +1,61 @@
+<view class="profile-container">
+  <!-- 顶部用户信息 -->
+  <view class="user-header">
+    <view class="header-content">
+      <view class="user-info">
+        <view class="user-avatar">
+          <image 
+            wx:if="{{userInfo.avatarUrl}}" 
+            src="{{userInfo.avatarUrl}}" 
+            class="avatar-image"
+            mode="aspectFill"
+          />
+          <text wx:else class="avatar-placeholder">👤</text>
+        </view>
+        <view class="user-details">
+          <text class="user-name">{{userInfo.nickName || '张同学'}}</text>
+          <text class="user-desc">英语学习爱好者</text>
+        </view>
+      </view>
+      <view class="settings-btn" bind:tap="showSettings">
+        <text class="settings-icon">⚙️</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 功能菜单 -->
+  <view class="menu-section">
+    <view class="menu-group">
+      <view class="menu-title">其他</view>
+      <view class="menu-list">
+        <view class="menu-item" bind:tap="showHelp">
+          <view class="menu-icon">❓</view>
+          <text class="menu-text">帮助与反馈</text>
+          <text class="menu-arrow">></text>
+        </view>
+        <view class="menu-item" bind:tap="showAbout">
+          <view class="menu-icon">ℹ️</view>
+          <text class="menu-text">关于我们</text>
+          <text class="menu-arrow">></text>
+        </view>
+        <view class="menu-item">
+          <view class="menu-icon">📱</view>
+          <text class="menu-text">版本信息</text>
+          <text class="menu-version">v1.0.0</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 退出登录 -->
+  <view class="logout-section">
+    <t-button 
+      theme="danger" 
+      size="large" 
+      class="logout-btn"
+      bind:tap="logout"
+    >
+      退出登录
+    </t-button>
+  </view>
+</view>

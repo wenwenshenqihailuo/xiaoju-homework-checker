@@ -1,0 +1,10 @@
+{
+  "name": "ocr-recognition",
+  "version": "1.0.0",
+  "description": "使用百度手写体OCR API进行高精度中英文文字识别",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -1,0 +1,552 @@
+.result-container {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+/* 顶部导航 */
+.header-section {
+  background: white;
+  padding: 48rpx 48rpx 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: #f0f0f0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 32rpx;
+}
+
+.back-icon {
+  font-size: 32rpx;
+  color: #666;
+}
+
+.page-title {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 主要内容 */
+.main-content {
+  padding: 0 48rpx 32rpx;
+}
+
+/* 评分卡片 */
+.score-card {
+  background: white;
+  border-radius: 32rpx;
+  padding: 48rpx;
+  margin-bottom: 32rpx;
+  text-align: center;
+}
+
+.score-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.score-circle {
+  width: 192rpx;
+  height: 192rpx;
+  background: linear-gradient(135deg, #52c41a 0%, #0052D9 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32rpx;
+}
+
+.score-number {
+  font-size: 72rpx;
+  font-weight: bold;
+  color: white;
+}
+
+.score-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.score-desc {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+}
+
+/* 项目统计 */
+.item-stats {
+  background: #f0f8ff;
+  border-radius: 16rpx;
+  padding: 12rpx 24rpx;
+  border: 1rpx solid #d6e4ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.stats-text {
+  font-size: 24rpx;
+  color: #0052D9;
+  font-weight: 500;
+}
+
+.stats-accuracy {
+  font-size: 22rpx;
+  color: #52c41a;
+  font-weight: 500;
+}
+
+/* 识别项目列表 */
+.simple-format-section {
+  background: white;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 24rpx;
+  display: block;
+}
+
+.simple-format-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.format-item {
+  background: #f8f9fa;
+  border: 1rpx solid #e9ecef;
+  border-radius: 16rpx;
+  padding: 12rpx 20rpx;
+  min-width: 120rpx;
+  text-align: center;
+}
+
+.format-text {
+  font-size: 26rpx;
+  color: #495057;
+  font-weight: 500;
+}
+
+/* 详细结果 */
+.results-section {
+  background: white;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.result-item {
+  border: 1rpx solid #e9ecef;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  background: #fafbfc;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.question-title {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.result-status {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+}
+
+.status-correct {
+  background: #f6ffed;
+  border: 1rpx solid #b7eb8f;
+  color: #52c41a;
+}
+
+.status-incorrect {
+  background: #fff2f0;
+  border: 1rpx solid #ffccc7;
+  color: #ff4d4f;
+}
+
+.status-icon {
+  font-size: 24rpx;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+.question-content {
+  margin-bottom: 20rpx;
+}
+
+.question-text {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.answer-text {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+  display: block;
+}
+
+/* 分析结果 */
+.answer-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.analysis-item {
+  display: flex;
+  gap: 12rpx;
+  align-items: flex-start;
+}
+
+.analysis-icon {
+  font-size: 28rpx;
+  margin-top: 4rpx;
+  flex-shrink: 0;
+}
+
+.analysis-content {
+  flex: 1;
+}
+
+.analysis-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.analysis-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.5;
+  display: block;
+}
+
+/* 项目分析 */
+.item-analyses {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.item-analysis {
+  background: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 12rpx 16rpx;
+}
+
+.item-text {
+  font-size: 24rpx;
+  color: #495057;
+  line-height: 1.4;
+}
+
+/* 错误列表 */
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.error-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: #fff2f0;
+  border-radius: 12rpx;
+  padding: 8rpx 12rpx;
+}
+
+.error-word {
+  font-size: 24rpx;
+  color: #ff4d4f;
+  font-weight: 500;
+}
+
+.error-suggestion {
+  font-size: 22rpx;
+  color: #52c41a;
+}
+
+.error-text {
+  font-size: 24rpx;
+  color: #ff4d4f;
+}
+
+/* 项目详细结果 */
+.item-results-section {
+  background: white;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.item-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.item-result {
+  border: 1rpx solid #e9ecef;
+  border-radius: 20rpx;
+  padding: 20rpx;
+  background: #fafbfc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.item-result:active {
+  background: #f0f0f0;
+  transform: scale(0.98);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.item-number {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.item-status {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 16rpx;
+  font-size: 22rpx;
+}
+
+.item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.item-text {
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.item-analysis {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* 操作按钮 */
+.action-buttons {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 32rpx;
+}
+
+.save-btn {
+  flex: 1;
+}
+
+.stop-btn {
+  flex: 1;
+}
+
+.recheck-btn {
+  flex: 1;
+}
+
+/* 实时更新提示 */
+.realtime-update-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 20px;
+  animation: slideDown 0.3s ease-out;
+}
+
+.tip-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tip-icon {
+  font-size: 16px;
+  animation: rotate 2s linear infinite;
+}
+
+.tip-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 任务进度 */
+.task-progress {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.progress-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.progress-status {
+  font-size: 14px;
+  color: #007aff;
+  font-weight: 500;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #007aff, #5ac8fa);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-text {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.progress-percentage {
+  font-size: 16px;
+  font-weight: 600;
+  color: #007aff;
+}
+
+
+
+/* 响应式设计 */
+@media (max-width: 750rpx) {
+  .main-content {
+    padding: 0 32rpx 32rpx;
+  }
+  
+  .score-card {
+    padding: 32rpx;
+  }
+  
+  .score-circle {
+    width: 160rpx;
+    height: 160rpx;
+  }
+  
+  .score-number {
+    font-size: 60rpx;
+  }
+  
+  .simple-format-list {
+    gap: 12rpx;
+  }
+  
+  .format-item {
+    padding: 10rpx 16rpx;
+    min-width: 100rpx;
+  }
+  
+  .format-text {
+    font-size: 24rpx;
+  }
+}

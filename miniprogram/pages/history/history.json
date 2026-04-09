@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "历史记录",
+  "navigationBarBackgroundColor": "#0052D9",
+  "navigationBarTextStyle": "white",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button"
+  }
+}

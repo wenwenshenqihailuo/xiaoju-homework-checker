@@ -1,0 +1,220 @@
+<view class="result-container">
+  <!-- 顶部导航 -->
+  <view class="header-section">
+    <view class="header-content">
+      <view class="back-btn" bind:tap="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <text class="page-title">检查结果</text>
+    </view>
+  </view>
+
+  <!-- 实时更新提示 -->
+  <view class="realtime-update-tip" wx:if="{{showRealtimeUpdate}}">
+    <view class="tip-content">
+      <text class="tip-icon">🔄</text>
+      <text class="tip-text">正在实时更新结果...</text>
+    </view>
+  </view>
+
+  <!-- 任务进度 -->
+  <view class="task-progress" wx:if="{{taskStatus === 'processing'}}">
+    <view class="progress-header">
+      <text class="progress-title">AI分析进度</text>
+      <text class="progress-status">{{taskStatus === 'processing' ? '处理中' : '已完成'}}</text>
+    </view>
+    <view class="progress-bar">
+      <view class="progress-fill" style="width: {{progress.percentage}}%"></view>
+    </view>
+    <view class="progress-info">
+      <text class="progress-text">已处理：{{progress.processed}} / {{progress.total}} 个词</text>
+      <text class="progress-percentage">{{progress.percentage}}%</text>
+    </view>
+  </view>
+
+  <!-- 总体评分 -->
+  <view class="main-content">
+    <view class="score-card">
+      <view class="score-header">
+        <view class="score-circle">
+          <text class="score-number">{{overallScore}}%</text>
+        </view>
+        <text class="score-title">总体正确率</text>
+        <text class="score-desc">{{scoreDescription}}</text>
+        <!-- 项目分析统计 -->
+        <view class="item-stats" wx:if="{{itemCount > 1}}">
+          <text class="stats-text">项目分析：{{itemCount}} 项</text>
+          <text class="stats-accuracy" wx:if="{{statistics}}">准确率：{{statistics.accuracy}}%</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 识别项目列表 -->
+    <view class="simple-format-section" wx:if="{{simpleFormatData.length > 0}}">
+      <text class="section-title">识别项目</text>
+      <view class="simple-format-list">
+        <view 
+          class="format-item" 
+          wx:for="{{simpleFormatData}}" 
+          wx:key="*this"
+        >
+          <text class="format-text">{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 详细结果 -->
+    <view class="results-section">
+      <text class="section-title">详细结果</text>
+      <view class="results-list">
+        <view 
+          class="result-item" 
+          wx:for="{{questionResults}}" 
+          wx:key="id"
+        >
+          <view class="result-header">
+            <text class="question-title">{{item.title}}</text>
+            <view class="result-status status-{{item.status}}">
+              <text wx:if="{{item.status === 'correct'}}" class="status-icon">✅</text>
+              <text wx:else class="status-icon">❌</text>
+              <text class="status-text">{{item.statusText}}</text>
+            </view>
+          </view>
+          
+
+          
+          <!-- 分析结果 -->
+          <view class="answer-analysis">
+            <view class="analysis-item">
+              <text class="analysis-icon">📝</text>
+              <view class="analysis-content">
+                <text class="analysis-title">AI分析：</text>
+                <text class="analysis-text">{{item.analysis}}</text>
+              </view>
+            </view>
+            
+            <!-- 项目分析详情 -->
+            <view class="analysis-item" wx:if="{{item.itemAnalyses && item.itemAnalyses.length > 0}}">
+              <text class="analysis-icon">📊</text>
+              <view class="analysis-content">
+                <text class="analysis-title">项目分析：</text>
+                <view class="item-analyses">
+                  <view class="item-analysis" wx:for="{{item.itemAnalyses}}" wx:key="*this">
+                    <text class="item-text">{{item}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 拼写错误 -->
+            <view class="analysis-item" wx:if="{{item.spellingErrors.length > 0}}">
+              <text class="analysis-icon">🔤</text>
+              <view class="analysis-content">
+                <text class="analysis-title">拼写错误：</text>
+                <view class="error-list">
+                  <view class="error-item" wx:for="{{item.spellingErrors}}" wx:key="*this">
+                    <text class="error-word">{{item}}</text>
+                    <text class="error-suggestion" wx:if="{{item.wordSuggestions[item]}}">→ {{item.wordSuggestions[item]}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 语法错误 -->
+            <view class="analysis-item" wx:if="{{item.grammarErrors.length > 0}}">
+              <text class="analysis-icon">📖</text>
+              <view class="analysis-content">
+                <text class="analysis-title">语法错误：</text>
+                <view class="error-list">
+                  <view class="error-item" wx:for="{{item.grammarErrors}}" wx:key="*this">
+                    <text class="error-text">{{item}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 建议的正确答案 -->
+            <view class="analysis-item" wx:if="{{item.correctAnswer}}">
+              <text class="analysis-icon">💡</text>
+              <view class="analysis-content">
+                <text class="analysis-title">建议答案：</text>
+                <text class="analysis-text">{{item.correctAnswer}}</text>
+              </view>
+            </view>
+            
+            <!-- 学习建议 -->
+            <view class="analysis-item" wx:if="{{item.suggestion}}">
+              <text class="analysis-icon">📚</text>
+              <view class="analysis-content">
+                <text class="analysis-title">学习建议：</text>
+                <text class="analysis-text">{{item.suggestion}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 项目详细结果 -->
+    <view class="item-results-section" wx:if="{{questionResults[0].itemResults && questionResults[0].itemResults.length > 0}}">
+      <text class="section-title">项目详细结果</text>
+      <view class="item-results-list">
+        <view 
+          class="item-result" 
+          wx:for="{{questionResults[0].itemResults}}" 
+          wx:key="itemIndex"
+          bind:tap="viewItemDetail"
+          data-index="{{index}}"
+        >
+          <view class="item-header">
+            <text class="item-number">第{{item.itemIndex}}项</text>
+            <view class="item-status status-{{item.isCorrect ? 'correct' : 'incorrect'}}">
+              <text wx:if="{{item.isCorrect}}" class="status-icon">✅</text>
+              <text wx:else class="status-icon">❌</text>
+              <text class="status-text">{{item.isCorrect ? '正确' : '需要改进'}}</text>
+            </view>
+          </view>
+          <view class="item-content">
+            <text class="item-text">{{item.originalItem}}</text>
+            <text class="item-analysis">{{item.analysis}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 操作按钮 -->
+    <view class="action-buttons">
+      <!-- 停止按钮 - 只在任务进行中时显示 -->
+      <t-button 
+        theme="danger" 
+        size="large" 
+        class="stop-btn"
+        bind:tap="stopTask"
+        wx:if="{{taskStatus === 'processing'}}"
+      >
+        停止分析
+      </t-button>
+      
+      <!-- 保存按钮 - 只在任务完成时显示 -->
+      <t-button 
+        theme="primary" 
+        size="large" 
+        class="save-btn"
+        bind:tap="saveResult"
+        wx:if="{{taskStatus === 'completed'}}"
+      >
+        保存结果
+      </t-button>
+      
+      <!-- 重新检查按钮 -->
+      <t-button 
+        theme="default" 
+        size="large" 
+        class="recheck-btn"
+        bind:tap="recheck"
+      >
+        重新检查
+      </t-button>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,22 @@
+{
+  "name": "ai-analysis",
+  "version": "1.0.0",
+  "description": "AI分析云函数 - 分析分段后的英语单词/短语",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "axios": "^1.6.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "wechat",
+    "miniprogram",
+    "cloud",
+    "ai",
+    "analysis"
+  ],
+  "author": "",
+  "license": "ISC"
+}

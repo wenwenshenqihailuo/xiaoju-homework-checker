@@ -1,0 +1,105 @@
+<view class="upload-container">
+  <!-- 顶部导航 -->
+  <view class="header-section">
+    <view class="header-content">
+      <text class="page-title">AI英语检查</text>
+    </view>
+    
+    <!-- 返回正在进行的检查按钮 -->
+    <view class="ongoing-task-section" wx:if="{{hasOngoingTask}}">
+      <view class="ongoing-task-info">
+        <text class="ongoing-task-icon">🔄</text>
+        <text class="ongoing-task-text">有正在进行的检查任务</text>
+      </view>
+      <t-button 
+        theme="primary" 
+        size="small" 
+        class="return-task-btn"
+        bind:tap="returnToOngoingTask"
+      >
+        返回检查
+      </t-button>
+    </view>
+  </view>
+
+  <!-- 上传区域 -->
+  <view class="main-content">
+    <view class="upload-card">
+      <view class="upload-header">
+        <view class="upload-icon">
+          <text class="icon">📸</text>
+        </view>
+        <text class="upload-title">上传英语作业照片</text>
+        <text class="upload-desc">支持PNG、JPG等格式，文件大小≤20MB</text>
+      </view>
+      
+      <!-- 上传按钮 -->
+      <view class="upload-area" bind:tap="chooseImage">
+        <view class="upload-placeholder">
+          <text class="upload-icon-large">📁</text>
+          <text class="upload-text">点击上传或拖拽图片</text>
+          <text class="upload-subtext">支持拍照或从相册选择</text>
+        </view>
+      </view>
+
+      <t-button 
+        theme="primary" 
+        size="large" 
+        class="select-image-btn"
+        bind:tap="chooseImage"
+      >
+        选择图片
+      </t-button>
+    </view>
+
+    <!-- 内容提取预览区域 -->
+    <view class="extraction-card" wx:if="{{isProcessing || recognizedText}}">
+      <view class="extraction-header">
+        <text class="extraction-title">内容提取预览</text>
+        <view class="extraction-status">
+          <text wx:if="{{isProcessing}}" class="status-processing">处理中...</text>
+          <text wx:elif="{{recognizedText}}" class="status-completed">提取完成</text>
+        </view>
+      </view>
+
+      <!-- 处理状态提示 -->
+      <view class="processing-status" wx:if="{{isProcessing}}">
+        <view class="status-content">
+          <text class="status-icon">⏳</text>
+          <text class="status-text">正在处理图片，请稍候...</text>
+        </view>
+      </view>
+
+      <!-- 分段列表 -->
+      <view class="segments-preview" wx:if="{{showSegments && segments.length > 0}}">
+        <view class="segments-header">
+          <text class="segments-title">识别结果</text>
+          <text class="segments-count">共 {{segments.length}} 项</text>
+        </view>
+        
+        <view class="segments-list">
+          <view class="segment-item" wx:for="{{segments}}" wx:key="id">
+            <view class="segment-number">{{item.id}}</view>
+            <view class="segment-content">{{item.text}}</view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 确认按钮 -->
+      <view class="confirm-section" wx:if="{{recognizedText}}">
+        <t-button 
+          theme="primary" 
+          size="large" 
+          class="confirm-btn"
+          bind:tap="startAIAnalysis"
+        >
+          开始AI分析
+        </t-button>
+      </view>
+    </view>
+  </view>
+  <!-- 底部提示 -->
+  <view class="bottom-tips">
+    <text class="tip-text">💡 提示：确保图片清晰，文字完整可见</text>
+  </view>
+</view>
