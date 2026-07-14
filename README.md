@@ -186,8 +186,8 @@ const interval = setInterval(async () => {
 
 ## 📞 联系方式
 
-- 📧 邮箱：support@example.com
-- 💬 微信：AIEnglishSupport
+- 📧 邮箱：macobest@163.com
+- 💬 微信：177636606264
 - 🐛 Issue：请使用GitHub Issues反馈问题
 
 ## 📄 许可证
