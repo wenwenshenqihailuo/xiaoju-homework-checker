@@ -1,14 +1,18 @@
-node_modules
+# 密钥和环境变量文件
 .env
-.env.local
-.env.development
-.env.production
-.env.test
-.env.test.local
-.env.test.local
-miniprogram_npm
-dist
+.env.*
+*.env
+config.local.js
+secrets.js
+secrets.json
+
+# 微信开发者工具
 .DS_Store
-.idea
-.vscode
-.wxml
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# 编辑器
+.vscode/settings.json
