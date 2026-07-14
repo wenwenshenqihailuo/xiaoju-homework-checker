@@ -5,7 +5,6 @@
   flex-direction: column;
 }
 
-/* 顶部装饰 */
 .header-decoration {
   height: 384rpx;
   background: linear-gradient(135deg, #0052D9 0%, #7B68EE 50%, #FF69B4 100%);
@@ -52,7 +51,6 @@
   color: #E6F3FF;
 }
 
-/* 装饰圆圈 */
 .decoration-circle {
   position: absolute;
   background: rgba(255, 255, 255, 0.1);
@@ -80,7 +78,6 @@
   height: 80rpx;
 }
 
-/* 登录区域 */
 .login-section {
   flex: 1;
   display: flex;
@@ -103,7 +100,7 @@
 
 .login-header {
   text-align: center;
-  margin-bottom: 64rpx;
+  margin-bottom: 48rpx;
 }
 
 .welcome-title {
@@ -115,14 +112,46 @@
 }
 
 .welcome-subtitle {
-  font-size: 32rpx;
+  font-size: 30rpx;
   color: #666;
   display: block;
 }
 
-/* 登录按钮 */
+.agreement-section {
+  margin-bottom: 48rpx;
+}
+
+.agreement-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.agreement-copy {
+  flex: 1;
+  line-height: 1.7;
+}
+
+.agreement-text {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.link-text {
+  font-size: 26rpx;
+  color: #0052D9;
+}
+
+.agreement-tip {
+  display: block;
+  margin-top: 20rpx;
+  font-size: 22rpx;
+  color: #999;
+  padding-left: 56rpx;
+}
+
 .login-button-container {
-  margin-bottom: 64rpx;
+  margin-bottom: 16rpx;
 }
 
 .wechat-login-btn {
@@ -138,22 +167,6 @@
   margin-right: 16rpx;
 }
 
-/* 协议部分 */
-.agreement-section {
-  text-align: center;
-}
-
-.agreement-text {
-  font-size: 24rpx;
-  color: #999;
-  line-height: 1.5;
-}
-
-.link-text {
-  color: #0052D9;
-}
-
-/* 底部装饰 */
 .footer-decoration {
   padding: 48rpx 48rpx 64rpx;
   text-align: center;

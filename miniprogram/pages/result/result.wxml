@@ -49,20 +49,6 @@
       </view>
     </view>
 
-    <!-- 识别项目列表 -->
-    <view class="simple-format-section" wx:if="{{simpleFormatData.length > 0}}">
-      <text class="section-title">识别项目</text>
-      <view class="simple-format-list">
-        <view 
-          class="format-item" 
-          wx:for="{{simpleFormatData}}" 
-          wx:key="*this"
-        >
-          <text class="format-text">{{item}}</text>
-        </view>
-      </view>
-    </view>
-
     <!-- 详细结果 -->
     <view class="results-section">
       <text class="section-title">详细结果</text>
@@ -81,8 +67,8 @@
             </view>
           </view>
           
-
           
+            
           <!-- 分析结果 -->
           <view class="answer-analysis">
             <view class="analysis-item">
@@ -132,7 +118,7 @@
                 </view>
               </view>
             </view>
-            
+
             <!-- 建议的正确答案 -->
             <view class="analysis-item" wx:if="{{item.correctAnswer}}">
               <text class="analysis-icon">💡</text>
@@ -141,7 +127,7 @@
                 <text class="analysis-text">{{item.correctAnswer}}</text>
               </view>
             </view>
-            
+
             <!-- 学习建议 -->
             <view class="analysis-item" wx:if="{{item.suggestion}}">
               <text class="analysis-icon">📚</text>

@@ -32,8 +32,6 @@ axios.interceptors.response.use(function (response) {
   return Promise.reject(error)
 })
 
-// DeepSeek API配置
-const DEEPSEEK_API_KEY = 'sk-d52f5f18ac8840c59083f53db4ea7be1' // 请替换为你的DeepSeek API Key
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 
 // 任务配置
@@ -55,16 +53,48 @@ const API_CONFIG = {
 // 配置axios默认设置
 axios.defaults.timeout = API_CONFIG.TIMEOUT
 
+function requireSecret(name, label = name) {
+  const value = process.env[name]
+
+  if (!value) {
+    throw new Error(`缺少云函数环境变量 ${name}（${label}）`)
+  }
+
+  return value
+}
+
 // 云函数入口函数
-exports.main = async (event, context) => {
+function legacyBuildSafeEventSummary(event = {}) {
+  return {
+    action: event.action || null,
+    isStartNewTask: !!event.isStartNewTask,
+    isContinueTask: !!event.isContinueTask,
+    isGetPartialResults: !!event.isGetPartialResults,
+    isGetFinalResults: !!event.isGetFinalResults,
+    isClearDatabase: !!event.isClearDatabase,
+    taskId: event.taskId || null,
+    fileID: event.fileID || null,
+    segmentRecordId: event.segmentRecordId || null,
+    currentBatch: typeof event.currentBatch === 'number' ? event.currentBatch : null,
+    sourceSegmentsCount: Array.isArray(event.sourceSegments) ? event.sourceSegments.length : 0,
+    hasSourceText: !!event.sourceText
+  }
+}
+
+const legacyMain = async (event, context) => {
   console.log('AI分析云函数被调用，参数：', event);
   
   try {
     const { 
+      action,
       isStartNewTask, 
       isGetPartialResults, 
       isGetFinalResults,
       taskId,
+      fileID,
+      segmentRecordId,
+      sourceSegments,
+      sourceText,
       isContinueTask, // 新增：继续处理下一批
       currentBatch, // 新增：当前批次号
       isClearDatabase // 新增：清除数据库
@@ -76,9 +106,18 @@ exports.main = async (event, context) => {
       return await clearScript.main(event, context)
     }
 
+    if (action === 'stopTask') {
+      return await stopTask(taskId)
+    }
+
     // 开始新任务
     if (isStartNewTask) {
-      return await startNewTask();
+      return await startNewTask({
+        fileID,
+        segmentRecordId,
+        sourceSegments,
+        sourceText
+      });
     }
     
     // 继续处理下一批
@@ -111,12 +150,13 @@ exports.main = async (event, context) => {
 };
 
 // 开始新任务
-async function startNewTask() {
+async function startNewTask(options = {}) {
   try {
     console.log('开始新的AI分析任务');
     
     // 获取待分析的分段数据
-    const segments = await getSegmentsToAnalyze();
+    const segmentSource = await getSegmentsToAnalyze(options);
+    const segments = segmentSource.segments;
     if (!segments || segments.length === 0) {
       return {
         success: false,
@@ -135,6 +175,11 @@ async function startNewTask() {
       currentBatch: 0,
       totalBatches: Math.ceil(segments.length / TASK_CONFIG.BATCH_SIZE),
       allAnalysisResults: [],
+      fileID: segmentSource.fileID || options.fileID || null,
+      segmentRecordId: segmentSource.segmentRecordId || options.segmentRecordId || null,
+      ocrRecordId: segmentSource.ocrRecordId || null,
+      sourceSegments: segmentSource.sourceSegments || options.sourceSegments || [],
+      sourceText: segmentSource.sourceText || options.sourceText || '',
       createTime: new Date(),
       updateTime: new Date(),
       error: null
@@ -145,6 +190,29 @@ async function startNewTask() {
 
     // 处理第一批
     const firstBatchResult = await processBatch(segments, 0, taskId);
+
+    if (firstBatchResult.stopped) {
+      const stoppedTaskRecord = {
+        ...taskRecord,
+        status: 'stopped',
+        processedRecords: firstBatchResult.processedCount,
+        failedRecords: firstBatchResult.failedCount,
+        allAnalysisResults: firstBatchResult.results,
+        updateTime: new Date(),
+        stoppedAt: new Date()
+      };
+      await updateTaskRecord(taskId, stoppedTaskRecord);
+
+      return {
+        success: false,
+        status: 'stopped',
+        taskId,
+        processedCount: firstBatchResult.processedCount,
+        totalCount: segments.length,
+        results: firstBatchResult.results,
+        error: '任务已停止'
+      };
+    }
     
     // 更新任务记录
     const updatedTaskRecord = {
@@ -206,8 +274,27 @@ async function continueTask(taskId, currentBatch) {
       };
     }
 
+    if (taskRecord.status === 'stopped') {
+      return {
+        success: false,
+        status: 'stopped',
+        taskId,
+        processedCount: taskRecord.processedRecords,
+        totalCount: taskRecord.totalRecords,
+        results: taskRecord.allAnalysisResults || [],
+        error: '任务已停止'
+      };
+    }
+
     // 获取待分析的分段数据
-    const segments = await getSegmentsToAnalyze();
+    const segmentSource = await getSegmentsToAnalyze({
+      fileID: taskRecord.fileID,
+      segmentRecordId: taskRecord.segmentRecordId,
+      ocrRecordId: taskRecord.ocrRecordId,
+      sourceSegments: taskRecord.sourceSegments,
+      sourceText: taskRecord.sourceText
+    });
+    const segments = segmentSource.segments;
     if (!segments || segments.length === 0) {
       return {
         success: false,
@@ -261,6 +348,22 @@ async function continueTask(taskId, currentBatch) {
       updateTime: new Date()
     };
 
+    if (batchResult.stopped) {
+      updatedTaskRecord.status = 'stopped';
+      updatedTaskRecord.stoppedAt = new Date();
+      await updateTaskRecord(taskId, updatedTaskRecord);
+
+      return {
+        success: false,
+        status: 'stopped',
+        taskId,
+        processedCount: totalProcessed,
+        totalCount: taskRecord.totalRecords,
+        results: allResults,
+        error: '任务已停止'
+      };
+    }
+
     // 检查是否还有更多批次
     const hasMore = (currentBatch + 1) * TASK_CONFIG.BATCH_SIZE < segments.length;
     
@@ -305,6 +408,17 @@ async function processBatch(segments, startIndex, taskId) {
 
   for (let i = 0; i < batchSegments.length; i++) {
     try {
+      const latestTaskRecord = await getTaskRecord(taskId);
+      if (latestTaskRecord && latestTaskRecord.status === 'stopped') {
+        console.log(`任务 ${taskId} 已停止，中断当前批次处理`);
+        return {
+          results,
+          processedCount,
+          failedCount,
+          stopped: true
+        };
+      }
+
       const segment = batchSegments[i];
       console.log(`处理分段 ${startIndex + i + 1}/${segments.length}: ${segment.originalItem.substring(0, 50)}...`);
 
@@ -352,7 +466,58 @@ async function processBatch(segments, startIndex, taskId) {
   return {
     results,
     processedCount,
-    failedCount
+    failedCount,
+    stopped: false
+  };
+}
+
+async function stopTask(taskId) {
+  if (!taskId) {
+    return {
+      success: false,
+      error: '缺少 taskId'
+    };
+  }
+
+  const taskRecord = await getTaskRecord(taskId);
+  if (!taskRecord) {
+    return {
+      success: false,
+      error: '任务记录不存在'
+    };
+  }
+
+  if (taskRecord.status === 'completed') {
+    return {
+      success: false,
+      status: 'completed',
+      error: '任务已完成，无法停止'
+    };
+  }
+
+  if (taskRecord.status === 'stopped') {
+    return {
+      success: true,
+      status: 'stopped',
+      taskId,
+      message: '任务已停止'
+    };
+  }
+
+  const updatedTaskRecord = {
+    ...taskRecord,
+    status: 'stopped',
+    updateTime: new Date(),
+    stoppedAt: new Date()
+  };
+
+  await updateTaskRecord(taskId, updatedTaskRecord);
+
+  return {
+    success: true,
+    status: 'stopped',
+    taskId,
+    message: '任务已成功停止'
   };
 }
 
@@ -424,7 +589,7 @@ async function queryTaskStatus(event) {
 }
 
 // 恢复失败任务
-async function resumeFailedTask(event) {
+async function legacyResumeFailedTask(event) {
   console.log('恢复失败任务...', event.taskId)
   
   try {
@@ -466,7 +631,7 @@ async function resumeFailedTask(event) {
 }
 
 // 恢复中断任务（超时或自调用失败）
-async function resumeInterruptedTask(event) {
+async function legacyResumeInterruptedTask(event) {
   console.log('恢复中断任务...', event.taskId)
   
   try {
@@ -600,90 +765,103 @@ function generateTaskId() {
 }
 
 // 获取待分析的分段数据
-async function getSegmentsToAnalyze() {
+async function getSegmentsToAnalyze(options = {}) {
   try {
-    // 从数据库获取所有分段记录
-    const allSegmentRecords = await getAllSegmentRecords();
-    
-    console.log('获取到的分段记录数量:', allSegmentRecords.length);
-    if (allSegmentRecords.length > 0) {
-      console.log('第一条记录结构:', JSON.stringify(allSegmentRecords[0], null, 2));
-    }
-    
-    // 如果没有数据，返回测试数据
-    if (!allSegmentRecords || allSegmentRecords.length === 0) {
-      console.log('数据库中没有分段记录，使用测试数据');
-      return [
-        {
-          segmentId: 'test_1',
-          originalItem: 'hello world',
-          recordId: 'test_record_1',
-          segmentIndex: 0
-        },
-        {
-          segmentId: 'test_2',
-          originalItem: 'good morning',
-          recordId: 'test_record_1',
-          segmentIndex: 1
-        },
-        {
-          segmentId: 'test_3',
-          originalItem: 'thank you',
-          recordId: 'test_record_1',
-          segmentIndex: 2
-        },
-        {
-          segmentId: 'test_4',
-          originalItem: 'see you later',
-          recordId: 'test_record_1',
-          segmentIndex: 3
-        },
-        {
-          segmentId: 'test_5',
-          originalItem: 'how are you',
-          recordId: 'test_record_1',
-          segmentIndex: 4
-        }
-      ];
-    }
-
-    // 转换为分段数组
-    const segments = [];
-    allSegmentRecords.forEach(record => {
-      if (record.segments && Array.isArray(record.segments)) {
-        record.segments.forEach((segment, index) => {
-          segments.push({
-            segmentId: `${record._id}_${index}`,
-            originalItem: segment.text || segment.originalItem || segment.original || segment,
-            recordId: record._id,
-            segmentIndex: index
-          });
-        });
+    if (options.sourceSegments && Array.isArray(options.sourceSegments) && options.sourceSegments.length > 0) {
+      const normalizedSegments = normalizeSourceSegments(options.sourceSegments)
+      console.log(`使用前端编辑后的内容进行分析，共 ${normalizedSegments.length} 个分段`)
+      return {
+        segments: normalizedSegments,
+        fileID: options.fileID || null,
+        segmentRecordId: options.segmentRecordId || null,
+        ocrRecordId: options.ocrRecordId || null,
+        sourceSegments: options.sourceSegments,
+        sourceText: options.sourceText || normalizedSegments.map(segment => segment.originalItem).join('\n')
       }
-    });
+    }
 
-    console.log(`获取到 ${segments.length} 个待分析分段`);
-    return segments;
+    const segmentRecord = await getSegmentRecordForAnalysis(options);
+    if (!segmentRecord) {
+      console.warn('未找到匹配的分段记录:', options);
+      return {
+        segments: [],
+        fileID: options.fileID || null,
+        segmentRecordId: options.segmentRecordId || null,
+        ocrRecordId: options.ocrRecordId || null,
+        sourceSegments: options.sourceSegments || [],
+        sourceText: options.sourceText || ''
+      };
+    }
+
+    if (!segmentRecord.segments || !Array.isArray(segmentRecord.segments)) {
+      console.warn('分段记录中没有有效的 segments 数组:', segmentRecord._id);
+      return {
+        segments: [],
+        fileID: segmentRecord.fileID || options.fileID || null,
+        segmentRecordId: segmentRecord._id,
+        ocrRecordId: segmentRecord.ocrRecordId || null,
+        sourceSegments: [],
+        sourceText: ''
+      };
+    }
+
+    const segments = segmentRecord.segments.map((segment, index) => ({
+      segmentId: `${segmentRecord._id}_${index}`,
+      originalItem: segment.text || segment.originalItem || segment.original || segment,
+      recordId: segmentRecord._id,
+      segmentIndex: index
+    }));
+
+    console.log(`获取到 ${segments.length} 个待分析分段，segmentRecordId: ${segmentRecord._id}`);
+    return {
+      segments,
+      fileID: segmentRecord.fileID || options.fileID || null,
+      segmentRecordId: segmentRecord._id,
+      ocrRecordId: segmentRecord.ocrRecordId || null,
+      sourceSegments: [],
+      sourceText: ''
+    };
 
   } catch (error) {
     console.error('获取待分析分段失败：', error);
-    // 返回测试数据作为备选
-    console.log('使用测试数据作为备选');
-    return [
-      {
-        segmentId: 'test_1',
-        originalItem: 'hello world',
-        recordId: 'test_record_1',
-        segmentIndex: 0
-      },
-      {
-        segmentId: 'test_2',
-        originalItem: 'good morning',
-        recordId: 'test_record_1',
-        segmentIndex: 1
-      }
-    ];
+    return {
+      segments: [],
+      fileID: options.fileID || null,
+      segmentRecordId: options.segmentRecordId || null,
+      ocrRecordId: options.ocrRecordId || null,
+      sourceSegments: options.sourceSegments || [],
+      sourceText: options.sourceText || ''
+    };
   }
+}
+
+function normalizeSourceSegments(sourceSegments) {
+  return sourceSegments
+    .map((segment, index) => {
+      const text = typeof segment === 'string'
+        ? segment.trim()
+        : (segment.text || segment.originalItem || segment.original || '').trim()
+
+      if (!text) {
+        return null
+      }
+
+      const id = typeof segment === 'object' && segment.id !== undefined
+        ? segment.id
+        : index + 1
+
+      return {
+        segmentId: typeof segment === 'object' && segment.segmentId
+          ? segment.segmentId
+          : `custom_${index + 1}`,
+        originalItem: text,
+        text: text,
+        id: id,
+        recordId: 'custom_input',
+        segmentIndex: index
+      }
+    })
+    .filter(Boolean)
 }
 
 // 分析单个分段
@@ -796,17 +974,52 @@ function sleep(ms) {
   return delay(ms);
 }
 
-// 获取所有分段记录
-async function getAllSegmentRecords() {
+// 获取本次任务对应的分段记录
+async function getSegmentRecordForAnalysis(options = {}) {
   try {
-    const result = await db.collection('segments')
-      .orderBy('createTime', 'desc')
-      .get()
-    
-    return result.data || []
+    if (options.segmentRecordId) {
+      const result = await db.collection('segments')
+        .doc(options.segmentRecordId)
+        .get();
+      if (result.data) {
+        return result.data;
+      }
+    }
+
+    let ocrRecordId = options.ocrRecordId || null;
+
+    if (!ocrRecordId && options.fileID) {
+      const ocrResult = await db.collection('ocr_records')
+        .where({
+          fileID: options.fileID
+        })
+        .orderBy('createTime', 'desc')
+        .limit(1)
+        .get();
+
+      if (ocrResult.data && ocrResult.data.length > 0) {
+        ocrRecordId = ocrResult.data[0]._id;
+      }
+    }
+
+    if (ocrRecordId) {
+      const segmentResult = await db.collection('segments')
+        .where({
+          ocrRecordId: ocrRecordId
+        })
+        .orderBy('createTime', 'desc')
+        .limit(1)
+        .get();
+
+      if (segmentResult.data && segmentResult.data.length > 0) {
+        return segmentResult.data[0];
+      }
+    }
+
+    return null;
   } catch (error) {
-    console.error('获取所有分段记录失败:', error)
-    throw error
+    console.error('获取分段记录失败:', error);
+    throw error;
   }
 }
 
@@ -819,6 +1032,7 @@ async function analyzeSingleSegment(segment, segmentIndex, totalSegments) {
       const prompt = buildSegmentAnalysisPrompt(segment, segmentIndex, totalSegments)
       
       console.log(`调用DeepSeek API分析第 ${segmentIndex} 个分段... (尝试 ${attempt}/${API_CONFIG.MAX_RETRIES})`)
+      const deepSeekApiKey = requireSecret('DEEPSEEK_API_KEY', 'DeepSeek API Key')
       
       const response = await axios.post(DEEPSEEK_API_URL, {
         model: 'deepseek-chat',
@@ -832,7 +1046,7 @@ async function analyzeSingleSegment(segment, segmentIndex, totalSegments) {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+          'Authorization': `Bearer ${deepSeekApiKey}`
         },
         timeout: API_CONFIG.TIMEOUT,
         // 添加连接配置
@@ -866,23 +1080,28 @@ async function analyzeSingleSegment(segment, segmentIndex, totalSegments) {
 
 // 构建分段分析提示词
 function buildSegmentAnalysisPrompt(segment, segmentIndex, totalSegments) {
-  return `你是一个专业的英语老师和拼写检查专家。现在需要分析一个英语单词或短语（第 ${segmentIndex}/${totalSegments} 个分段）。
+  return `你是一个专业的英语老师、拼写检查专家和中英对照批改助手。现在需要分析一个作业分段（第 ${segmentIndex}/${totalSegments} 个分段）。
 
 请仔细分析这个分段，并严格按照以下JSON格式返回结果：
 
 {
   "isCorrect": true/false,
-  "analysis": "这个单词/短语的简单分析在20个字之内",
-  "correctAnswer": "正确的拼写或表达",
+  "analysis": "简单分析，20个字之内",
+  "correctAnswer": "正确的拼写、表达或中英对照",
   "suggestion": "改进建议在20个字之内",
   "confidence": 0.0-1.0
 }
 
 分析要求：
-1. 仔细检查单词的拼写是否正确
-2. 如果是短语，检查语法和表达是否规范
-3. 提供的纠正建议
-4. 给出分析的可信度
+1. 先判断这个分段里是只有英文、只有中文，还是中英同时出现。
+2. 如果只有英文：只检查英文拼写、语法和表达是否正确，不能因为没有中文就判错。
+3. 如果中英同时出现：检查中文和英文是否语义大致对应不需要很严格、翻译是否大致合理、拼写和表达是否正确。
+4. 只有在明确存在拼写错误、语法错误、表达错误或中英对照错误时，才返回 isCorrect=false。
+5. 如果内容本身正确，但只是缺少中文或缺少英文对照，仍然返回 isCorrect=true。
+6. 如果中英对应正确，可在 analysis 中简短说明“中英对应正确”；如果不对应，在 analysis 中指出“中英不对应”。
+7. correctAnswer 中返回你认为正确的内容；如果原内容正确，可返回原内容。
+8. suggestion 给出简短可执行建议，如果中英文对应和翻译大致正确虽然会判断为对，但是可以在这里写出建议的回答。
+9. 必须只返回合法JSON，不要返回额外解释。
 
 待分析分段：${segment.text} (编号: ${segment.id})
 
@@ -1457,5 +1676,100 @@ function estimateRemainingTime(taskRecord) {
   } else {
     const hours = Math.ceil(estimatedSeconds / 3600)
     return `约 ${hours} 小时`
+  }
+}
+
+function buildSafeEventSummary(event = {}) {
+  return {
+    action: event.action || null,
+    isStartNewTask: !!event.isStartNewTask,
+    isContinueTask: !!event.isContinueTask,
+    isGetPartialResults: !!event.isGetPartialResults,
+    isGetFinalResults: !!event.isGetFinalResults,
+    isClearDatabase: !!event.isClearDatabase,
+    taskId: event.taskId || null,
+    fileID: event.fileID || null,
+    segmentRecordId: event.segmentRecordId || null,
+    currentBatch: typeof event.currentBatch === 'number' ? event.currentBatch : null,
+    sourceSegmentsCount: Array.isArray(event.sourceSegments) ? event.sourceSegments.length : 0,
+    hasSourceText: !!event.sourceText
+  }
+}
+
+exports.main = async (event, context) => {
+  console.log('AI分析云函数被调用，安全参数摘要：', buildSafeEventSummary(event))
+
+  try {
+    const {
+      action,
+      isStartNewTask,
+      isGetPartialResults,
+      isGetFinalResults,
+      taskId,
+      fileID,
+      segmentRecordId,
+      sourceSegments,
+      sourceText,
+      isContinueTask,
+      currentBatch,
+      isClearDatabase
+    } = event || {}
+
+    if (isClearDatabase) {
+      const clearScript = require('./clear-database.js')
+      return await clearScript.main(event, context)
+    }
+
+    if (action === 'stopTask') {
+      return await stopTask(taskId)
+    }
+
+    if (isStartNewTask) {
+      return await startNewTask({
+        fileID,
+        segmentRecordId,
+        sourceSegments,
+        sourceText
+      })
+    }
+
+    if (isContinueTask) {
+      return await continueTask(taskId, currentBatch)
+    }
+
+    if (isGetPartialResults) {
+      return await getPartialResults(taskId)
+    }
+
+    if (isGetFinalResults) {
+      return await getFinalResults(taskId)
+    }
+
+    return {
+      success: false,
+      error: '无效的操作类型'
+    }
+  } catch (error) {
+    console.error('AI分析云函数执行错误：', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+async function resumeFailedTask(event) {
+  console.warn('resumeFailedTask 已安全下线，当前未启用恢复失败任务功能:', event?.taskId || null)
+  return {
+    success: false,
+    error: '恢复失败任务功能暂未启用'
+  }
+}
+
+async function resumeInterruptedTask(event) {
+  console.warn('resumeInterruptedTask 已安全下线，当前未启用恢复中断任务功能:', event?.taskId || null)
+  return {
+    success: false,
+    error: '恢复中断任务功能暂未启用'
   }
 }

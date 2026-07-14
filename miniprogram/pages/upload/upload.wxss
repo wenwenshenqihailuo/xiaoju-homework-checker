@@ -231,6 +231,13 @@
   color: #333;
 }
 
+.segments-tip {
+  display: block;
+  margin-bottom: 16rpx;
+  font-size: 24rpx;
+  color: #666;
+}
+
 .segments-count {
   font-size: 24rpx;
   color: #666;
@@ -247,7 +254,7 @@
 
 .segment-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16rpx;
   padding: 20rpx;
   background: #f8f9fa;
@@ -262,25 +269,43 @@
 }
 
 .segment-number {
-  width: 40rpx;
-  height: 40rpx;
-  background: linear-gradient(135deg, #0052D9 0%, #667eea 100%);
-  color: white;
-  border-radius: 50%;
+  width: 44rpx;
+  height: 44rpx;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0052D9 0%, #667eea 100%);
+  color: #ffffff;
   font-size: 24rpx;
   font-weight: bold;
-  flex-shrink: 0;
 }
 
 .segment-content {
   flex: 1;
+}
+
+.segment-input {
+  width: 100%;
+  min-height: 72rpx;
+  padding: 14rpx 18rpx;
+  border: 2rpx solid #d9e2f2;
+  border-radius: 10rpx;
+  background: #ffffff;
+  box-sizing: border-box;
   font-size: 28rpx;
   color: #333;
   line-height: 1.5;
-  word-break: break-word;
+}
+
+.segment-delete {
+  flex-shrink: 0;
+  padding: 10rpx 14rpx;
+  border-radius: 10rpx;
+  font-size: 24rpx;
+  color: #d93026;
+  background: #fff1f0;
 }
 
 /* 问题输入区域 */

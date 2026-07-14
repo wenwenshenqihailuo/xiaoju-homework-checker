@@ -13,7 +13,9 @@ Page({
     hasOngoingTask: false,
     ongoingTaskInfo: null,
     // 新增：当前文件ID
-    currentFileID: null
+    currentFileID: null,
+    // 新增：当前分段记录ID
+    currentSegmentRecordID: null
   },
 
   onLoad() {
@@ -62,6 +64,7 @@ Page({
   async startAIAnalysis() {
     // 保存当前识别的文本和文件ID
     const currentFileID = this.data.currentFileID
+    const currentSegmentRecordID = this.data.currentSegmentRecordID
     if (!currentFileID) {
       wx.showToast({
         title: '请先上传图片',
@@ -70,20 +73,47 @@ Page({
       return
     }
 
+    const latestSegments = this.getSegmentsForAnalysis()
+    if (!latestSegments) {
+      return
+    }
+
+    const sourceText = this.buildEditableTextFromSegments(latestSegments)
+    const sourceSegments = latestSegments.map(segment => ({
+      id: segment.id,
+      text: segment.text,
+      originalItem: segment.text
+    }))
+
+    this.clearSavedResultFlag()
+    wx.setStorageSync('currentAnalysisInput', {
+      sourceText,
+      sourceSegments,
+      fileID: currentFileID,
+      segmentRecordId: currentSegmentRecordID || null,
+      updatedAt: Date.now()
+    })
+
     // 直接跳转到结果页面，不显示AI分析进度条
-    const segmentCount = this.data.segments.length || 0
+    const segmentCount = latestSegments.length || 0
     wx.navigateTo({
-      url: `/pages/result/result?fileID=${currentFileID}&segmentCount=${segmentCount}&fromUpload=true`
+      url: `/pages/result/result?fileID=${currentFileID}&segmentCount=${segmentCount}&segmentRecordId=${currentSegmentRecordID || ''}&fromUpload=true`
     })
   },
 
   // 上传图片到云存储
   async uploadImage(filePath) {
+    this.clearSavedResultFlag()
+
     this.setData({ 
       isProcessing: true,
+      recognizedText: '',
       segments: [],
-      showSegments: false
+      showSegments: false,
+      currentSegmentRecordID: null
     })
+
+    wx.removeStorageSync('currentAnalysisInput')
     
     try {
       // 检查文件大小（限制为4MB）
@@ -178,6 +208,8 @@ Page({
         errorMessage = '识别次数已达上限，请稍后再试'
       } else if (error.message.includes('format') || error.message.includes('INVALID_INPUT')) {
         errorMessage = '图片格式不支持，请使用JPG、PNG等格式'
+      } else if (error.message.includes('CONFIG_MISSING') || error.message.includes('缺少云函数环境变量')) {
+        errorMessage = 'OCR服务未配置，请先设置云函数环境变量'
       } else if (error.message.includes('API密钥无效') || error.message.includes('INVALID_API_KEY')) {
         errorMessage = 'API配置错误，请联系管理员'
       } else if (error.message.includes('请求超时') || error.message.includes('TIMEOUT')) {
@@ -213,17 +245,19 @@ Page({
       
       if (segmentResult.result && segmentResult.result.success) {
         // 分段处理成功
+        const segmentRecordId = segmentResult.result.data?.segmentRecordId || null
         
         // 格式化分段数据用于显示
         const segments = this.formatSegmentsForDisplay(ocrResult.simpleFormat) // 使用 simpleFormat
         
         this.setData({
           segments: segments,
-          showSegments: true
+          showSegments: true,
+          currentSegmentRecordID: segmentRecordId
         })
         
         // 显示完整的原始识别文本
-        const recognizedText = ocrResult.text || '未能识别到文字内容'
+        const recognizedText = this.buildEditableTextFromSegments(segments) || ocrResult.text || '未能识别到文字内容'
         console.log('识别到的文本:', recognizedText)
         
         this.setData({
@@ -271,12 +305,122 @@ Page({
     }
     
     return segments.map((segment, index) => {
+      const rawText = segment.text || segment.originalItem || segment.original || segment
+      const cleanText = this.stripSegmentPrefix(rawText)
+
       return {
         id: segment.id || (index + 1),
-        text: segment.text || segment.originalItem || segment.original || segment,
-        displayText: `${segment.id || (index + 1)}. ${segment.text || segment.originalItem || segment.original || segment}`
+        text: cleanText,
+        displayText: cleanText
       }
     })
+  },
+
+  // 去掉识别结果前面的编号前缀
+  stripSegmentPrefix(text) {
+    return String(text || '')
+      .trim()
+      .replace(/^\d+\s*[.、．]+\s*/, '')
+  },
+
+  // 生成可编辑文本
+  buildEditableTextFromSegments(segments) {
+    if (!segments || !Array.isArray(segments)) {
+      return ''
+    }
+
+    return segments
+      .map(segment => (segment.text || '').trim())
+      .filter(Boolean)
+      .join('\n')
+  },
+
+  // 同步分段状态
+  syncSegmentsState(segments) {
+    const normalizedSegments = (segments || []).map((segment, index) => {
+      const text = typeof segment === 'string'
+        ? this.stripSegmentPrefix(segment)
+        : this.stripSegmentPrefix(segment.text || '')
+
+      return {
+        ...segment,
+        id: index + 1,
+        text,
+        displayText: `${index + 1}. ${text}`
+      }
+    })
+
+    this.setData({
+      segments: normalizedSegments,
+      showSegments: normalizedSegments.length > 0,
+      recognizedText: this.buildEditableTextFromSegments(normalizedSegments)
+    })
+
+    return normalizedSegments
+  },
+
+  // 获取用于分析的分段
+  getSegmentsForAnalysis() {
+    const normalizedSegments = (this.data.segments || [])
+      .map((segment, index) => {
+        const text = (segment.text || '').trim()
+        return {
+          id: index + 1,
+          text,
+          displayText: `${index + 1}. ${text}`
+        }
+      })
+
+    if (normalizedSegments.length === 0) {
+      wx.showToast({
+        title: '请先提取内容',
+        icon: 'none'
+      })
+      return null
+    }
+
+    const hasEmptySegment = normalizedSegments.some(segment => !segment.text)
+    if (hasEmptySegment) {
+      wx.showToast({
+        title: '有空白项，请修改或删除',
+        icon: 'none'
+      })
+      return null
+    }
+
+    this.syncSegmentsState(normalizedSegments)
+    return normalizedSegments
+  },
+
+  // 直接编辑某一项提取内容
+  onSegmentTextInput(e) {
+    const { index } = e.currentTarget.dataset
+    const segments = [...this.data.segments]
+
+    if (segments[index]) {
+      segments[index] = {
+        ...segments[index],
+        text: e.detail.value
+      }
+      this.syncSegmentsState(segments)
+    }
+  },
+
+  // 删除某一项提取内容
+  deleteSegment(e) {
+    const { index } = e.currentTarget.dataset
+    const segments = [...this.data.segments]
+
+    if (segments.length <= 1) {
+      wx.showToast({
+        title: '请至少保留一项内容',
+        icon: 'none'
+      })
+      return
+    }
+
+    segments.splice(index, 1)
+    this.syncSegmentsState(segments)
   },
 
   // 检查是否有正在进行的任务
@@ -359,6 +503,17 @@ Page({
   },
 
   // 重置到初始状态
+  clearSavedResultFlag() {
+    try {
+      if (wx.getStorageSync('hasSavedResult')) {
+        wx.removeStorageSync('hasSavedResult')
+        console.log('已清除已保存结果标记，允许新任务正常恢复')
+      }
+    } catch (error) {
+      console.warn('清除已保存结果标记失败:', error)
+    }
+  },
+
   resetToInitialState() {
     console.log('重置upload页面到初始状态')
     
@@ -369,7 +524,8 @@ Page({
       showSegments: false,
       hasOngoingTask: false,
       ongoingTaskInfo: null,
-      currentFileID: null
+      currentFileID: null,
+      currentSegmentRecordID: null
     })
     
     // 清除本地存储的任务信息
@@ -380,6 +536,7 @@ Page({
       // 设置标记，表示结果已经保存，不再显示正在进行的任务
       wx.setStorageSync('hasSavedResult', true)
       console.log('已设置结果保存标记')
+      wx.removeStorageSync('currentAnalysisInput')
     } catch (error) {
       console.warn('清除本地存储失败:', error)
     }

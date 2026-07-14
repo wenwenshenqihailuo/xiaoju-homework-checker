@@ -2,15 +2,14 @@ const app = getApp()
 
 Page({
   data: {
-    loading: false
+    loading: false,
+    hasAgreed: false
   },
 
   onLoad() {
-    // 检查是否已登录
     this.checkLoginStatus()
   },
 
-  // 检查登录状态
   checkLoginStatus() {
     const userInfo = wx.getStorageSync('userInfo')
     if (userInfo && userInfo.openid) {
@@ -18,18 +17,23 @@ Page({
     }
   },
 
-  // 处理微信登录
   handleWechatLogin() {
-    if (this.data.loading) return
-    
+    if (this.data.loading) {
+      return
+    }
+
+    if (!this.data.hasAgreed) {
+      this.showAgreementRequired()
+      return
+    }
+
     this.setData({ loading: true })
-    
+
     wx.showLoading({
       title: '登录中...',
       mask: true
     })
 
-    // 获取用户信息
     wx.getUserProfile({
       desc: '用于完善用户资料',
       success: (res) => {
@@ -48,29 +52,25 @@ Page({
     })
   },
 
-  // 云开发登录
   async loginWithCloud(userInfo) {
     try {
-      // 1. 获取openid
       const loginResult = await wx.cloud.callFunction({
         name: 'login'
       })
-      
+
       const openid = loginResult.result.openid
       console.log('获取openid成功:', openid)
 
-      // 2. 查询用户是否已存在
       const db = wx.cloud.database()
       const userCollection = db.collection('users')
-      
+
       const userQuery = await userCollection.where({
-        openid: openid
+        openid
       }).get()
 
       let userData = null
 
       if (userQuery.data.length > 0) {
-        // 用户已存在，更新信息
         userData = userQuery.data[0]
         await userCollection.doc(userData._id).update({
           data: {
@@ -82,9 +82,8 @@ Page({
         })
         console.log('用户信息更新成功')
       } else {
-        // 新用户，创建记录
         const newUser = {
-          openid: openid,
+          openid,
           nickName: userInfo.nickName,
           avatarUrl: userInfo.avatarUrl,
           createTime: new Date(),
@@ -94,11 +93,11 @@ Page({
           totalScore: 0,
           studyDays: 0
         }
-        
+
         const addResult = await userCollection.add({
           data: newUser
         })
-        
+
         userData = {
           _id: addResult._id,
           ...newUser
@@ -106,7 +105,6 @@ Page({
         console.log('新用户创建成功')
       }
 
-      // 3. 保存用户信息到本地存储
       const localUserInfo = {
         _id: userData._id,
         openid: userData.openid,
@@ -127,9 +125,7 @@ Page({
         icon: 'success'
       })
 
-      // 跳转到首页
       this.navigateToHome()
-
     } catch (error) {
       console.error('云开发登录失败:', error)
       wx.hideLoading()
@@ -141,30 +137,42 @@ Page({
     }
   },
 
-  // 跳转到首页
   navigateToHome() {
     wx.switchTab({
       url: '/pages/upload/upload'
     })
   },
 
-  // 显示用户协议
-  showUserAgreement() {
-    wx.showModal({
-      title: '用户协议',
-      content: '这里是用户协议内容...',
-      showCancel: false,
-      confirmText: '我知道了'
+  handleAgreementChange(e) {
+    const values = e.detail.value || []
+    this.setData({
+      hasAgreed: values.includes('agree')
     })
   },
 
-  // 显示隐私政策
+  showAgreementRequired() {
+    wx.showToast({
+      title: '请先阅读并勾选协议',
+      icon: 'none',
+      duration: 2500
+    })
+  },
+
+  showUserAgreement() {
+    wx.showModal({
+      title: '用户服务协议',
+      content: '请在充分阅读并理解协议内容后，再自主选择是否同意并继续登录。',
+      showCancel: false,
+      confirmText: '我已阅读'
+    })
+  },
+
   showPrivacyPolicy() {
     wx.showModal({
       title: '隐私政策',
-      content: '这里是隐私政策内容...',
+      content: '请在充分阅读并理解隐私政策内容后，自主选择是否同意。未勾选同意前，不会继续登录。',
       showCancel: false,
-      confirmText: '我知道了'
+      confirmText: '我已阅读'
     })
   }
 })

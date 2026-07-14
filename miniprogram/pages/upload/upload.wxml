@@ -53,7 +53,7 @@
     </view>
 
     <!-- 内容提取预览区域 -->
-    <view class="extraction-card" wx:if="{{isProcessing || recognizedText}}">
+    <view class="extraction-card" wx:if="{{isProcessing || recognizedText || showSegments}}">
       <view class="extraction-header">
         <text class="extraction-title">内容提取预览</text>
         <view class="extraction-status">
@@ -76,17 +76,27 @@
           <text class="segments-title">识别结果</text>
           <text class="segments-count">共 {{segments.length}} 项</text>
         </view>
+        <text class="segments-tip">可直接修改每一项，也可以删除不要的内容</text>
         
         <view class="segments-list">
           <view class="segment-item" wx:for="{{segments}}" wx:key="id">
             <view class="segment-number">{{item.id}}</view>
-            <view class="segment-content">{{item.text}}</view>
+            <view class="segment-content">
+              <input
+                class="segment-input"
+                value="{{item.text}}"
+                placeholder="请输入识别内容"
+                data-index="{{index}}"
+                bindinput="onSegmentTextInput"
+              />
+            </view>
+            <text class="segment-delete" data-index="{{index}}" bind:tap="deleteSegment">删除</text>
           </view>
         </view>
       </view>
 
       <!-- 确认按钮 -->
-      <view class="confirm-section" wx:if="{{recognizedText}}">
+      <view class="confirm-section" wx:if="{{showSegments && segments.length > 0}}">
         <t-button 
           theme="primary" 
           size="large" 

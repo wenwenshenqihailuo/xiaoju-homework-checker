@@ -1,54 +1,60 @@
 <view class="login-container">
-  <!-- 顶部装饰 -->
   <view class="header-decoration">
     <view class="header-content">
       <view class="app-icon">
         <text class="icon">📚</text>
       </view>
       <text class="app-title">AI英语检查</text>
-      <text class="app-subtitle">智能识别英语作业，快速检查正确性</text>
+      <text class="app-subtitle">智能识别英语作业，快速检查正误</text>
     </view>
-    
-    <!-- 装饰圆圈 -->
+
     <view class="decoration-circle circle-1"></view>
     <view class="decoration-circle circle-2"></view>
     <view class="decoration-circle circle-3"></view>
   </view>
 
-  <!-- 登录区域 -->
   <view class="login-section">
     <view class="login-card">
       <view class="login-header">
         <text class="welcome-title">欢迎使用</text>
-        <text class="welcome-subtitle">请选择登录方式</text>
+        <text class="welcome-subtitle">请先阅读协议后再选择登录</text>
       </view>
 
-      <!-- 微信登录按钮 -->
+      <view class="agreement-section">
+        <checkbox-group bindchange="handleAgreementChange">
+          <label class="agreement-check">
+            <checkbox
+              value="agree"
+              checked="{{hasAgreed}}"
+              color="#0052D9"
+            />
+            <view class="agreement-copy">
+              <text class="agreement-text">我已阅读并同意</text>
+              <text class="link-text" bind:tap="showUserAgreement">《用户服务协议》</text>
+              <text class="agreement-text">和</text>
+              <text class="link-text" bind:tap="showPrivacyPolicy">《隐私政策》</text>
+            </view>
+          </label>
+        </checkbox-group>
+        <text class="agreement-tip">未勾选前不会继续登录</text>
+      </view>
+
       <view class="login-button-container">
-        <t-button 
-          theme="primary" 
-          size="large" 
+        <t-button
+          theme="primary"
+          size="large"
           class="wechat-login-btn"
           bind:tap="handleWechatLogin"
+          loading="{{loading}}"
+          disabled="{{loading || !hasAgreed}}"
         >
           <text class="wechat-icon">💬</text>
-          <text>微信登录</text>
+          <text>{{hasAgreed ? '微信登录' : '请先勾选协议'}}</text>
         </t-button>
-      </view>
-
-      <!-- 底部说明 -->
-      <view class="agreement-section">
-        <text class="agreement-text">
-          登录即表示同意
-          <text class="link-text" bind:tap="showUserAgreement">用户协议</text>
-          和
-          <text class="link-text" bind:tap="showPrivacyPolicy">隐私政策</text>
-        </text>
       </view>
     </view>
   </view>
 
-  <!-- 底部装饰 -->
   <view class="footer-decoration">
     <text class="version-text">AI英语检查系统 v1.0.0</text>
     <text class="slogan-text">让英语学习更简单</text>

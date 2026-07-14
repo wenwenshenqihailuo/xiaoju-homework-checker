@@ -1,4 +1,3 @@
-// 云函数入口文件
 const cloud = require('wx-server-sdk')
 
 cloud.init({
@@ -7,35 +6,32 @@ cloud.init({
 
 const db = cloud.database()
 
-// 云函数入口函数
-exports.main = async (event, context) => {
+exports.main = async (event) => {
   const { action, data } = event
-  
-  console.log('result-save 云函数被调用:', { action, data })
-  
+  const { OPENID } = cloud.getWXContext()
+
+  console.log('result-save called:', { action, hasData: !!data, openid: OPENID })
+
   try {
     switch (action) {
       case 'saveResultData':
-        return await saveResultData(data)
-      
+        return await saveResultData(data, OPENID)
       case 'mergeAnalysisByTime':
         return await mergeAnalysisByTime(data)
-      
       case 'getAnalysisHistory':
-        return await getAnalysisHistory(data)
-
+        return await getAnalysisHistory(data, OPENID)
+      case 'getSavedAnalysisResult':
+        return await getSavedAnalysisResult(data, OPENID)
       case 'deleteAnalysisHistory':
-        const { OPENID } = cloud.getWXContext();
-        return await deleteAnalysisHistory(event.recordId, OPENID);
-      
+        return await deleteAnalysisHistory(event.recordId, OPENID)
       default:
         return {
           success: false,
-          error: `无效的操作类型: ${action}`
+          error: `无效的操作类型: ${action || 'unknown'}`
         }
     }
   } catch (error) {
-    console.error('result-save 云函数执行失败:', error)
+    console.error('result-save failed:', error)
     return {
       success: false,
       error: error.message
@@ -43,103 +39,83 @@ exports.main = async (event, context) => {
   }
 }
 
-// 删除单条历史记录
 async function deleteAnalysisHistory(recordId, openid) {
   if (!recordId || !openid) {
-    return { success: false, error: '缺少必要参数' };
+    return { success: false, error: '缺少必要参数' }
   }
 
   try {
-    // 获取记录
-    const record = await db.collection('user_analysis_history').doc(recordId).get();
-    
-    // 权限验证：如果记录有 openid，则必须匹配；如果没有 openid，允许删除
-    if (record.data._openid && record.data._openid !== openid) {
-      return { success: false, error: '无权限删除此记录' };
-    }
-    
-    // 如果没有 openid，记录警告但允许删除
-    if (!record.data._openid) {
-      console.warn(`记录 ${recordId} 没有 openid，允许删除`);
+    const record = await db.collection('user_analysis_history').doc(recordId).get()
+    const historyRecord = record.data
+    const ownerOpenId = getRecordOwnerOpenId(historyRecord)
+
+    if (!ownerOpenId) {
+      return { success: false, error: '记录缺少归属信息，禁止删除' }
     }
 
-    // 执行删除
-    await db.collection('user_analysis_history').doc(recordId).remove();
-    
-    console.log(`历史记录删除成功, recordId: ${recordId}, openid: ${openid}`);
-    return { success: true };
+    if (ownerOpenId !== openid) {
+      return { success: false, error: '无权限删除此记录' }
+    }
 
+    await db.collection('user_analysis_history').doc(recordId).remove()
+
+    console.log('history deleted:', { recordId, openid })
+    return { success: true }
   } catch (error) {
-    console.error('删除历史记录失败:', error);
-    return { success: false, error: error.message };
+    console.error('deleteAnalysisHistory failed:', error)
+    return { success: false, error: error.message }
   }
 }
 
-// 保存结果页面的分析结果
-async function saveResultData(resultData) {
+async function saveResultData(resultData, openid) {
   try {
-    console.log('开始保存结果页面分析结果:', resultData)
-    
-    // 验证必要字段
-    if (!resultData.taskId && !resultData.analysisRecordId) {
+    if (!resultData || (!resultData.taskId && !resultData.analysisRecordId)) {
       throw new Error('缺少必要的标识字段：taskId 或 analysisRecordId')
     }
-    
-    // 处理分析结果数据
+
     const processedData = processAnalysisData(resultData)
-    
-    // 准备保存的数据
+    const existingRecord = await findExistingSavedResult(resultData, openid)
+
+    if (existingRecord) {
+      await upsertUserHistoryRecord(existingRecord._id, resultData, processedData.statistics, openid)
+      return {
+        success: true,
+        recordId: existingRecord._id,
+        collectionName: 'ai_analysis_results',
+        message: '结果已存在，已复用原保存记录',
+        historySaved: true,
+        dataProcessed: true,
+        reusedExisting: true
+      }
+    }
+
     const dataToSave = {
       ...processedData,
-      createTime: resultData.createTime || new Date(),
+      createTime: resultData.createTime ? new Date(resultData.createTime) : new Date(),
       updateTime: new Date(),
       status: resultData.status || 'completed',
       source: 'result_page',
+      ownerOpenId: openid || null,
       version: '1.0',
       saveType: 'complete_analysis'
     }
-    
-    // 保存到 ai_analysis_results 集合
+
     const saveResult = await db.collection('ai_analysis_results').add({
       data: dataToSave
     })
-    
-    console.log(`结果页面分析结果已保存，记录ID: ${saveResult._id}`)
-    
-    // 保存到用户分析历史集合
-    try {
-      const historyData = {
-        analysisRecordId: saveResult._id,
-        taskId: resultData.taskId,
-        overallScore: resultData.overallScore,
-        itemCount: resultData.itemCount,
-        createTime: new Date(),
-        simpleFormatData: resultData.simpleFormatData,
-        fileID: resultData.fileID,
-        segmentCount: resultData.segmentCount,
-        statistics: dataToSave.statistics
-      }
-      
-      await db.collection('user_analysis_history').add({
-        data: historyData
-      })
-      
-      console.log('分析结果已同时保存到用户历史记录')
-    } catch (historyError) {
-      console.warn('保存到用户历史记录失败，但不影响主要保存:', historyError)
-    }
-    
+
+    await upsertUserHistoryRecord(saveResult._id, resultData, dataToSave.statistics, openid)
+
     return {
       success: true,
       recordId: saveResult._id,
       collectionName: 'ai_analysis_results',
-      message: '结果页面分析结果保存成功',
+      message: '结果保存成功',
       historySaved: true,
       dataProcessed: true
     }
-    
   } catch (error) {
-    console.error('保存结果页面分析结果失败:', error)
+    console.error('saveResultData failed:', error)
     return {
       success: false,
       error: error.message
@@ -147,171 +123,229 @@ async function saveResultData(resultData) {
   }
 }
 
-// 处理分析数据
+async function findExistingSavedResult(resultData, openid) {
+  if (resultData.analysisRecordId) {
+    try {
+      const existingById = await db.collection('ai_analysis_results')
+        .doc(resultData.analysisRecordId)
+        .get()
+
+      if (
+        existingById.data &&
+        existingById.data.source === 'result_page' &&
+        (!openid || existingById.data.ownerOpenId === openid)
+      ) {
+        return existingById.data
+      }
+    } catch (error) {
+      console.warn('findExistingSavedResult by analysisRecordId failed:', error)
+    }
+  }
+
+  if (resultData.taskId) {
+    const existingByTask = await db.collection('ai_analysis_results')
+      .where({
+        taskId: resultData.taskId,
+        source: 'result_page',
+        ownerOpenId: openid || null
+      })
+      .orderBy('createTime', 'desc')
+      .limit(1)
+      .get()
+
+    if (existingByTask.data && existingByTask.data.length > 0) {
+      return existingByTask.data[0]
+    }
+  }
+
+  return null
+}
+
+async function upsertUserHistoryRecord(analysisRecordId, resultData, statistics, openid) {
+  const historyData = {
+    analysisRecordId,
+    taskId: resultData.taskId || null,
+    overallScore: resultData.overallScore || 0,
+    itemCount: resultData.itemCount || 0,
+    createTime: new Date(),
+    updateTime: new Date(),
+    simpleFormatData: resultData.simpleFormatData || [],
+    fileID: resultData.fileID || null,
+    segmentCount: resultData.segmentCount || 0,
+    statistics: statistics || null,
+    ownerOpenId: openid || null
+  }
+
+  const existingHistory = await db.collection('user_analysis_history')
+    .where({
+      analysisRecordId,
+      ownerOpenId: openid || null
+    })
+    .limit(1)
+    .get()
+
+  if (existingHistory.data && existingHistory.data.length > 0) {
+    const existingRecord = existingHistory.data[0]
+    const { createTime, ...updateData } = historyData
+
+    await db.collection('user_analysis_history')
+      .doc(existingRecord._id)
+      .update({
+        data: updateData
+      })
+
+    return existingRecord._id
+  }
+
+  const addResult = await db.collection('user_analysis_history').add({
+    data: historyData
+  })
+
+  return addResult._id
+}
+
 function processAnalysisData(resultData) {
   const processed = { ...resultData }
-  
-  // 处理问题结果数据
+
   if (processed.questionResults && Array.isArray(processed.questionResults)) {
-    processed.questionResults = processed.questionResults.map((question, qIndex) => {
-      if (question.itemResults && Array.isArray(question.itemResults)) {
-        question.itemResults = question.itemResults.map((item, iIndex) => {
-          // 为每个项目添加索引
-          item.itemIndex = iIndex + 1
-          question.itemIndex = qIndex + 1
-          
-          // 格式化分析内容
-          if (item.analysis) {
-            item.formattedAnalysis = `${item.itemIndex}. ${item.analysis}`
+    processed.questionResults = processed.questionResults.map((question, questionIndex) => {
+      const normalizedQuestion = { ...question }
+
+      if (normalizedQuestion.itemResults && Array.isArray(normalizedQuestion.itemResults)) {
+        normalizedQuestion.itemResults = normalizedQuestion.itemResults.map((item, itemIndex) => {
+          const normalizedItem = { ...item }
+          normalizedItem.itemIndex = itemIndex + 1
+
+          if (normalizedItem.analysis) {
+            normalizedItem.formattedAnalysis = `${normalizedItem.itemIndex}. ${normalizedItem.analysis}`
           }
-          
-          return item
+
+          return normalizedItem
         })
-        
-        // 计算问题统计
-        question.itemCount = question.itemResults.length
-        question.correctItems = question.itemResults.filter(item => item.isCorrect).length
-        question.accuracy = question.itemCount > 0 ? (question.correctItems / question.itemCount * 100).toFixed(2) : 0
+
+        normalizedQuestion.itemIndex = questionIndex + 1
+        normalizedQuestion.itemCount = normalizedQuestion.itemResults.length
+        normalizedQuestion.correctItems = normalizedQuestion.itemResults.filter(item => item.isCorrect).length
+        normalizedQuestion.accuracy = normalizedQuestion.itemCount > 0
+          ? (normalizedQuestion.correctItems / normalizedQuestion.itemCount * 100).toFixed(2)
+          : 0
       }
-      return question
+
+      return normalizedQuestion
     })
   }
-  
-  // 计算总体统计
+
   if (processed.questionResults && processed.questionResults.length > 0) {
     const totalItems = processed.questionResults.reduce((sum, question) => {
       return sum + (question.itemResults ? question.itemResults.length : 0)
     }, 0)
-    
+
     const correctItems = processed.questionResults.reduce((sum, question) => {
-      if (question.itemResults) {
-        return sum + question.itemResults.filter(item => item.isCorrect).length
+      if (!question.itemResults) {
+        return sum
       }
-      return sum
+
+      return sum + question.itemResults.filter(item => item.isCorrect).length
     }, 0)
-    
+
     processed.statistics = {
       ...processed.statistics,
-      totalItems: totalItems,
-      correctItems: correctItems,
+      totalItems,
+      correctItems,
       accuracy: totalItems > 0 ? (correctItems / totalItems * 100).toFixed(2) : 0,
       processedAt: new Date()
     }
   }
-  
+
   return processed
 }
 
-// 根据时间合并分析结果
-async function mergeAnalysisByTime(data) {
+async function mergeAnalysisByTime(data = {}) {
   try {
-    const { 
-      timeRange, 
-      targetTime, 
+    const {
+      timeRange,
+      targetTime,
       analysisField = 'analysis',
       outputCollection = 'merged_analysis_results'
     } = data
-    
-    console.log('开始根据时间合并分析结果...', { timeRange, targetTime, analysisField, outputCollection })
-    
+
     let query = {}
-    
+
     if (targetTime) {
-      // 如果指定了具体时间，查找该时间点的记录
-      query.createTime = targetTime
+      query.createTime = new Date(targetTime)
     } else if (timeRange) {
-      // 如果指定了时间范围，查找该范围内的记录
       const { startTime, endTime } = timeRange
+
       if (startTime && endTime) {
-        query.createTime = db.command.gte(startTime).and(db.command.lte(endTime))
+        query.createTime = db.command.gte(new Date(startTime)).and(db.command.lte(new Date(endTime)))
       } else if (startTime) {
-        query.createTime = db.command.gte(startTime)
+        query.createTime = db.command.gte(new Date(startTime))
       } else if (endTime) {
-        query.createTime = db.command.lte(endTime)
+        query.createTime = db.command.lte(new Date(endTime))
       }
-    } else {
-      // 如果没有指定时间，获取最新的记录
-      console.log('未指定时间，获取最新的分析结果记录...')
     }
-    
-    // 查询符合条件的记录
+
     let queryBuilder = db.collection('ai_analysis_results')
-    
     if (Object.keys(query).length > 0) {
       queryBuilder = queryBuilder.where(query)
     }
-    
-    // 按时间排序
-    const result = await queryBuilder
-      .orderBy('createTime', 'asc')
-      .get()
-    
+
+    const result = await queryBuilder.orderBy('createTime', 'asc').get()
     if (!result.data || result.data.length === 0) {
       return {
         success: false,
         error: '没有找到符合条件的分析结果记录'
       }
     }
-    
-    console.log(`找到 ${result.data.length} 条符合条件的记录`)
-    
-    // 提取分析内容并合并
+
     const mergedAnalysis = []
     let recordCount = 0
-    
-    result.data.forEach((record, index) => {
+
+    result.data.forEach(record => {
       if (record[analysisField]) {
-        recordCount++
-        // 按照 1. analysis 2. analysis 的格式
+        recordCount += 1
         mergedAnalysis.push(`${recordCount}. ${record[analysisField]}`)
       }
     })
-    
+
     if (mergedAnalysis.length === 0) {
       return {
         success: false,
         error: `没有找到包含 ${analysisField} 字段的记录`
       }
     }
-    
-    // 创建合并后的记录
+
     const mergedRecord = {
       originalRecordCount: result.data.length,
       analysisCount: mergedAnalysis.length,
-      mergedAnalysis: mergedAnalysis,
-      mergedText: mergedAnalysis.join('\n'), // 用换行符连接
+      mergedAnalysis,
+      mergedText: mergedAnalysis.join('\n'),
       timeRange: {
         startTime: result.data[0].createTime,
         endTime: result.data[result.data.length - 1].createTime
       },
-      originalRecordIds: result.data.map(r => r._id), // 保存原始记录ID
+      originalRecordIds: result.data.map(record => record._id),
       createTime: new Date(),
       updateTime: new Date(),
       status: 'merged'
     }
-    
-    // 保存到指定集合
+
     const saveResult = await db.collection(outputCollection).add({
       data: mergedRecord
     })
-    
-    console.log('分析结果合并成功，保存到集合:', outputCollection)
-    console.log('合并记录ID:', saveResult._id)
-    console.log('合并的分析数量:', mergedAnalysis.length)
-    
+
     return {
       success: true,
       recordId: saveResult._id,
       collectionName: outputCollection,
-      mergedAnalysis: mergedAnalysis,
+      mergedAnalysis,
       mergedText: mergedRecord.mergedText,
       originalRecordCount: result.data.length,
       analysisCount: mergedAnalysis.length,
       message: '分析结果合并成功'
     }
-    
   } catch (error) {
-    console.error('合并分析结果失败:', error)
+    console.error('mergeAnalysisByTime failed:', error)
     return {
       success: false,
       error: error.message
@@ -319,56 +353,247 @@ async function mergeAnalysisByTime(data) {
   }
 }
 
-// 获取分析历史
-async function getAnalysisHistory(data) {
+async function getAnalysisHistory(data = {}, openid) {
   try {
-    const { 
-      userId, 
-      limit = 20, 
+    const {
+      limit = 20,
       offset = 0,
       startDate,
       endDate
     } = data
-    
-    let query = {}
-    
-    // 如果指定了用户ID
-    if (userId) {
-      query.userId = userId
-    }
-    
-    // 如果指定了日期范围
-    if (startDate || endDate) {
-      query.createTime = {}
-      if (startDate) {
-        query.createTime = db.command.gte(new Date(startDate))
-      }
-      if (endDate) {
-        query.createTime = query.createTime ? 
-          query.createTime.and(db.command.lte(new Date(endDate))) :
-          db.command.lte(new Date(endDate))
+
+    if (!openid) {
+      return {
+        success: false,
+        error: '未获取到用户身份'
       }
     }
-    
-    const result = await db.collection('ai_analysis_results')
-      .where(query)
+
+    const queryLimit = Math.max(limit + offset + 1, 20)
+
+    const ownerResult = await db.collection('user_analysis_history')
+      .where({ ownerOpenId: openid })
       .orderBy('createTime', 'desc')
-      .skip(offset)
-      .limit(limit)
+      .limit(queryLimit)
       .get()
-    
+
+    const legacyResult = await db.collection('user_analysis_history')
+      .where({ _openid: openid })
+      .orderBy('createTime', 'desc')
+      .limit(queryLimit)
+      .get()
+
+    const mergedMap = new Map()
+    ;[...(ownerResult.data || []), ...(legacyResult.data || [])].forEach(record => {
+      if (!record || !record._id) {
+        return
+      }
+
+      if (!isRecordOwnedByUser(record, openid)) {
+        return
+      }
+
+      if (!isRecordWithinDateRange(record, startDate, endDate)) {
+        return
+      }
+
+      if (!mergedMap.has(record._id)) {
+        mergedMap.set(record._id, record)
+      }
+    })
+
+    const mergedRecords = sortRecordsByCreateTimeDesc(Array.from(mergedMap.values()))
+    const pagedRecords = mergedRecords.slice(offset, offset + limit)
+
     return {
       success: true,
-      data: result.data,
-      total: result.data.length,
-      hasMore: result.data.length === limit
+      data: pagedRecords,
+      total: pagedRecords.length,
+      hasMore: mergedRecords.length > offset + limit
     }
-    
   } catch (error) {
-    console.error('获取分析历史失败:', error)
+    console.error('getAnalysisHistory failed:', error)
     return {
       success: false,
       error: error.message
     }
   }
+}
+
+async function getSavedAnalysisResult(data = {}, openid) {
+  try {
+    const { analysisRecordId, taskId } = data
+
+    if (!openid) {
+      return {
+        success: false,
+        error: '未获取到用户身份'
+      }
+    }
+
+    if (!analysisRecordId && !taskId) {
+      return {
+        success: false,
+        error: '缺少必要参数'
+      }
+    }
+
+    const historyRecord = await findOwnedHistoryRecord({ analysisRecordId, taskId }, openid)
+    if (!historyRecord) {
+      return {
+        success: false,
+        error: '未找到对应的历史记录'
+      }
+    }
+
+    let analysisRecord = null
+
+    if (historyRecord.analysisRecordId) {
+      try {
+        const result = await db.collection('ai_analysis_results')
+          .doc(historyRecord.analysisRecordId)
+          .get()
+
+        analysisRecord = result.data || null
+      } catch (error) {
+        console.warn('getSavedAnalysisResult by analysisRecordId failed:', error)
+      }
+    }
+
+    if (!analysisRecord && historyRecord.taskId) {
+      analysisRecord = await findOwnedAnalysisResultByTaskId(historyRecord.taskId, openid)
+    }
+
+    if (!analysisRecord) {
+      return {
+        success: false,
+        error: '未找到已保存的分析结果'
+      }
+    }
+
+    const ownerOpenId = getRecordOwnerOpenId(analysisRecord)
+    if (ownerOpenId && ownerOpenId !== openid) {
+      return {
+        success: false,
+        error: '无权限查看此分析结果'
+      }
+    }
+
+    return {
+      success: true,
+      data: analysisRecord,
+      historyRecordId: historyRecord._id
+    }
+  } catch (error) {
+    console.error('getSavedAnalysisResult failed:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+function getRecordOwnerOpenId(record) {
+  if (!record) {
+    return null
+  }
+
+  return record.ownerOpenId || record._openid || null
+}
+
+function isRecordOwnedByUser(record, openid) {
+  if (!openid) {
+    return false
+  }
+
+  return getRecordOwnerOpenId(record) === openid
+}
+
+function isRecordWithinDateRange(record, startDate, endDate) {
+  const createTime = new Date(record.createTime || 0).getTime()
+  const startTime = startDate ? new Date(startDate).getTime() : null
+  const endTime = endDate ? new Date(endDate).getTime() : null
+
+  if (startTime && createTime < startTime) {
+    return false
+  }
+
+  if (endTime && createTime > endTime) {
+    return false
+  }
+
+  return true
+}
+
+function sortRecordsByCreateTimeDesc(records) {
+  return [...records].sort((a, b) => {
+    const timeA = new Date(a.createTime || 0).getTime()
+    const timeB = new Date(b.createTime || 0).getTime()
+    return timeB - timeA
+  })
+}
+
+async function getHistoryRecordsByField(fieldName, fieldValue, openid) {
+  if (!fieldValue || !openid) {
+    return []
+  }
+
+  const result = await db.collection('user_analysis_history')
+    .where({
+      [fieldName]: fieldValue
+    })
+    .orderBy('createTime', 'desc')
+    .limit(20)
+    .get()
+
+  return (result.data || []).filter(record => isRecordOwnedByUser(record, openid))
+}
+
+async function findOwnedHistoryRecord({ analysisRecordId, taskId }, openid) {
+  let candidates = []
+
+  if (analysisRecordId) {
+    candidates = candidates.concat(
+      await getHistoryRecordsByField('analysisRecordId', analysisRecordId, openid)
+    )
+  }
+
+  if (taskId) {
+    candidates = candidates.concat(
+      await getHistoryRecordsByField('taskId', taskId, openid)
+    )
+  }
+
+  const uniqueCandidates = []
+  const seenIds = new Set()
+
+  candidates.forEach(record => {
+    if (record && record._id && !seenIds.has(record._id)) {
+      seenIds.add(record._id)
+      uniqueCandidates.push(record)
+    }
+  })
+
+  return sortRecordsByCreateTimeDesc(uniqueCandidates)[0] || null
+}
+
+async function findOwnedAnalysisResultByTaskId(taskId, openid) {
+  if (!taskId || !openid) {
+    return null
+  }
+
+  const result = await db.collection('ai_analysis_results')
+    .where({
+      taskId,
+      ownerOpenId: openid
+    })
+    .orderBy('createTime', 'desc')
+    .limit(1)
+    .get()
+
+  if (result.data && result.data.length > 0) {
+    return result.data[0]
+  }
+
+  return null
 }

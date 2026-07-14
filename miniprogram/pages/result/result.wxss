@@ -515,37 +515,34 @@
   font-weight: 600;
   color: #007aff;
 }
-
-
-
 /* 响应式设计 */
 @media (max-width: 750rpx) {
   .main-content {
     padding: 0 32rpx 32rpx;
   }
-  
+
   .score-card {
     padding: 32rpx;
   }
-  
+
   .score-circle {
     width: 160rpx;
     height: 160rpx;
   }
-  
+
   .score-number {
     font-size: 60rpx;
   }
-  
+
   .simple-format-list {
     gap: 12rpx;
   }
-  
+
   .format-item {
     padding: 10rpx 16rpx;
     min-width: 100rpx;
   }
-  
+
   .format-text {
     font-size: 24rpx;
   }
