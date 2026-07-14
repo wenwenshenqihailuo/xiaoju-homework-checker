@@ -70,20 +70,57 @@ function extractSimpleFormat(text) {
     .map((line, index) => `${index + 1}. ${line}`)
 }
 
-function processRecognizedText(wordsResult, confidenceThreshold = 0.7) {
+// 清理常见的 OCR 手写识别误读
+function cleanOcrText(text) {
+  return text
+    // 修正手写体常见字符混淆
+    .replace(/(?<=[a-zA-Z])'(?=[a-zA-Z])/g, "'")  // 统一撇号
+    .replace(/[`´'']/g, "'")
+    .replace(/[""]/g, '"')
+    // 合并被错误换行拆开的同一句话（行尾非标点则认为是续行）
+    .replace(/([a-zA-Z,])\n([a-z])/g, '$1 $2')
+    // 去掉行首多余空格
+    .replace(/^ +/gm, '')
+    // 折叠连续空格
+    .replace(/ {2,}/g, ' ')
+    .trim()
+}
+
+function processRecognizedText(wordsResult, confidenceThreshold = 0.5) {
   try {
-    const highConfidenceWords = (wordsResult || []).filter(item => {
-      return item.probability && item.probability.average >= confidenceThreshold
+    const allWords = wordsResult || []
+
+    // 只过滤掉置信度极低的词（< 0.3），保留其余所有内容
+    const filtered = allWords.filter(item => {
+      if (!item.probability) return true
+      return item.probability.average >= confidenceThreshold
     })
 
-    const effectiveWords = highConfidenceWords.length > 0 ? highConfidenceWords : (wordsResult || [])
-    const fullText = effectiveWords.map(item => item.words).join('\n').trim()
+    // 如果过滤后太少（不足原来的一半），退回全量结果
+    const effectiveWords = filtered.length >= Math.ceil(allWords.length / 2)
+      ? filtered
+      : allWords
+
+    const rawText = effectiveWords.map(item => item.words).join('\n').trim()
+    const fullText = cleanOcrText(rawText)
     const simpleFormat = extractSimpleFormat(fullText)
+
+    // 计算平均置信度，便于调试
+    const avgConf = allWords.length > 0
+      ? allWords.reduce((sum, w) => sum + (w.probability?.average || 0), 0) / allWords.length
+      : 0
+
+    console.log('OCR confidence stats:', {
+      total: allWords.length,
+      kept: effectiveWords.length,
+      avgConf: avgConf.toFixed(3)
+    })
 
     return {
       originalText: fullText || '未能识别到文字内容',
       simpleFormat,
-      itemCount: simpleFormat.length
+      itemCount: simpleFormat.length,
+      avgConfidence: avgConf
     }
   } catch (error) {
     console.error('processRecognizedText failed:', error)
@@ -179,11 +216,12 @@ exports.main = async (event) => {
 
     const requestData = {
       image: base64Image,
-      language_type: 'CHN_ENG',
-      detect_direction: 'true',
-      paragraph: 'true',
-      probability: 'true',
-      vertexes_location: 'true'
+      language_type: 'ENG',           // 英语作业用纯英文模式，识别率更高
+      detect_direction: 'true',       // 自动纠正拍摄角度
+      recognize_granularity: 'big',   // 词级识别，比字符级更适合手写英文
+      probability: 'true',            // 返回置信度，用于过滤低质量词
+      paragraph: 'false',             // 关闭段落合并，保留原始行序
+      vertexes_location: 'false'      // 不需要坐标，减少返回数据量
     }
 
     const response = await axios.post(ocrUrl, requestData, {

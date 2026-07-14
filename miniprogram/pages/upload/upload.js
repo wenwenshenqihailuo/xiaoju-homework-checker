@@ -116,20 +116,20 @@ Page({
     wx.removeStorageSync('currentAnalysisInput')
     
     try {
-      // 检查文件大小（限制为4MB）
-      const fileInfo = await wx.getFileInfo({
-        filePath: filePath
-      })
-      
-      if (fileInfo.size > 4 * 1024 * 1024) {
-        // 如果图片过大，先压缩
+      // 压缩图片到 OCR 最佳范围（约 1~1.5MB）
+      // 过大会降低识别率，过小会丢失细节
+      const fileInfo = await wx.getFileInfo({ filePath })
+      const sizeMB = fileInfo.size / (1024 * 1024)
+
+      if (sizeMB > 1.5) {
+        // 根据原始大小动态调整质量：越大压得越狠，但不低于 60
+        const quality = sizeMB > 6 ? 60 : sizeMB > 3 ? 75 : 85
         const compressResult = await wx.compressImage({
           src: filePath,
-          quality: 95
+          quality
         })
-        
         filePath = compressResult.tempFilePath
-        console.log('图片压缩完成')
+        console.log(`图片压缩完成：${sizeMB.toFixed(1)}MB → quality ${quality}`)
       }
       
       // 生成唯一的文件名
